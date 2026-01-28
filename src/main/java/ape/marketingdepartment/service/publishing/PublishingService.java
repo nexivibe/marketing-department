@@ -3,6 +3,7 @@ package ape.marketingdepartment.service.publishing;
 import ape.marketingdepartment.model.PublishingProfile;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Interface for platform publishing services.
@@ -22,6 +23,18 @@ public interface PublishingService {
      * @return CompletableFuture that completes when publishing is done
      */
     CompletableFuture<PublishResult> publish(PublishingProfile profile, String content);
+
+    /**
+     * Publish content with status updates.
+     *
+     * @param profile The publishing profile with browser settings
+     * @param content The content to publish
+     * @param statusListener Callback for status updates during publishing
+     * @return CompletableFuture that completes when publishing is done
+     */
+    default CompletableFuture<PublishResult> publish(PublishingProfile profile, String content, Consumer<String> statusListener) {
+        return publish(profile, content);
+    }
 
     /**
      * Open browser for user to log in manually.

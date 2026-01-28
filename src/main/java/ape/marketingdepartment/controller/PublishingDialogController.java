@@ -3,6 +3,8 @@ package ape.marketingdepartment.controller;
 import ape.marketingdepartment.model.*;
 import ape.marketingdepartment.service.ai.AiReviewService;
 import ape.marketingdepartment.service.ai.AiServiceFactory;
+import ape.marketingdepartment.service.ai.AiStatus;
+import ape.marketingdepartment.service.ai.AiStatusListener;
 import ape.marketingdepartment.service.publishing.PublishingService;
 import ape.marketingdepartment.service.publishing.PublishingServiceFactory;
 import javafx.application.Platform;
@@ -90,6 +92,11 @@ public class PublishingDialogController {
         // Set project directory for logging
         service.setProjectDir(project.getPath());
 
+        // Set status listener for real-time updates
+        service.setStatusListener(status -> {
+            Platform.runLater(() -> updateStatusFromAi(status));
+        });
+
         setLoading(true);
         statusLabel.setText("Generating transform...");
 
@@ -127,6 +134,33 @@ public class PublishingDialogController {
         approveButton.setDisable(loading);
         postButton.setDisable(loading);
         transformedTextArea.setEditable(!loading);
+    }
+
+    private void updateStatusFromAi(AiStatus status) {
+        String displayText = status.getDisplayText();
+        switch (status.state()) {
+            case IDLE -> statusLabel.setStyle("-fx-text-fill: #666;");
+            case CONNECTING, SENDING -> {
+                statusLabel.setStyle("-fx-text-fill: #b8860b;");
+                statusLabel.setText(displayText);
+            }
+            case WAITING, RECEIVING -> {
+                statusLabel.setStyle("-fx-text-fill: #1e90ff;");
+                statusLabel.setText(displayText);
+            }
+            case PROCESSING -> {
+                statusLabel.setStyle("-fx-text-fill: #800080;");
+                statusLabel.setText(displayText);
+            }
+            case COMPLETE -> {
+                statusLabel.setStyle("-fx-text-fill: #228b22;");
+                statusLabel.setText("Transform generated - review and approve");
+            }
+            case ERROR -> {
+                statusLabel.setStyle("-fx-text-fill: #dc143c;");
+                statusLabel.setText(displayText);
+            }
+        }
     }
 
     private void updateButtonStates() {
@@ -188,30 +222,47 @@ public class PublishingDialogController {
         String content = transformedTextArea.getText().trim();
         setLoading(true);
         statusLabel.setText("Publishing to " + profile.getName() + "...");
+        statusLabel.setStyle("-fx-text-fill: #1e90ff;");
 
-        publishingService.publish(profile, content)
-                .thenAccept(result -> {
-                    Platform.runLater(() -> {
-                        setLoading(false);
-                        if (result.success()) {
-                            showInfo("Published Successfully",
-                                    "Your content has been posted!\n\n" +
-                                    (result.postUrl() != null ? "URL: " + result.postUrl() : ""));
-                            statusLabel.setText("Published successfully");
-                        } else {
-                            showError("Publishing Failed", result.message());
-                            statusLabel.setText("Publishing failed");
-                        }
-                    });
-                })
-                .exceptionally(ex -> {
-                    Platform.runLater(() -> {
-                        setLoading(false);
-                        showError("Publishing Failed", ex.getMessage());
-                        statusLabel.setText("Publishing failed");
-                    });
-                    return null;
-                });
+        // Use the status listener overload to show real-time progress
+        publishingService.publish(profile, content, status -> {
+            Platform.runLater(() -> {
+                statusLabel.setText(status);
+                // Color based on status type
+                if (status.startsWith("Error:")) {
+                    statusLabel.setStyle("-fx-text-fill: #dc143c;");
+                } else if (status.contains("success") || status.contains("Published")) {
+                    statusLabel.setStyle("-fx-text-fill: #228b22;");
+                } else if (status.contains("Looking") || status.contains("Trying")) {
+                    statusLabel.setStyle("-fx-text-fill: #b8860b;");
+                } else {
+                    statusLabel.setStyle("-fx-text-fill: #1e90ff;");
+                }
+            });
+        }).thenAccept(result -> {
+            Platform.runLater(() -> {
+                setLoading(false);
+                if (result.success()) {
+                    statusLabel.setStyle("-fx-text-fill: #228b22;");
+                    showInfo("Published Successfully",
+                            "Your content has been posted!\n\n" +
+                            (result.postUrl() != null ? "URL: " + result.postUrl() : ""));
+                    statusLabel.setText("Published successfully");
+                } else {
+                    statusLabel.setStyle("-fx-text-fill: #dc143c;");
+                    showError("Publishing Failed", result.message());
+                    statusLabel.setText("Publishing failed");
+                }
+            });
+        }).exceptionally(ex -> {
+            Platform.runLater(() -> {
+                setLoading(false);
+                statusLabel.setStyle("-fx-text-fill: #dc143c;");
+                showError("Publishing Failed", ex.getMessage());
+                statusLabel.setText("Publishing failed");
+            });
+            return null;
+        });
     }
 
     @FXML
@@ -229,11 +280,7 @@ public class PublishingDialogController {
     }
 
     private void showError(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        ErrorDialog.showDetailed(title, title, message);
     }
 
     private void showInfo(String title, String message) {

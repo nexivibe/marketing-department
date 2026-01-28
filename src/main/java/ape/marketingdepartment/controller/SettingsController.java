@@ -499,11 +499,7 @@ public class SettingsController {
     }
 
     private void showError(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        ErrorDialog.showDetailed(title, title, message);
     }
 
     private void showInfo(String title, String message) {

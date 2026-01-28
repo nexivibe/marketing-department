@@ -16,6 +16,8 @@ module ape.marketingdepartment {
     requires org.seleniumhq.selenium.api;
     requires org.seleniumhq.selenium.chrome_driver;
     requires org.seleniumhq.selenium.support;
+    requires org.seleniumhq.selenium.remote_driver;
+    requires org.seleniumhq.selenium.http;
     requires io.github.bonigarcia.webdrivermanager;
 
     opens ape.marketingdepartment to javafx.fxml;

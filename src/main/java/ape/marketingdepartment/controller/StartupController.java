@@ -9,6 +9,7 @@ import javafx.stage.DirectoryChooser;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -33,8 +34,8 @@ public class StartupController {
 
     private void setupLastProjectButton() {
         String lastPath = settings.getLastProjectPath();
-        if (lastPath != null && Files.exists(Path.of(lastPath))) {
-            Path path = Path.of(lastPath);
+        Path path = toPath(lastPath);
+        if (path != null && Files.exists(path)) {
             lastProjectButton.setText("Open: " + path.getFileName().toString());
             lastProjectButton.setVisible(true);
             lastProjectButton.setManaged(true);
@@ -48,7 +49,8 @@ public class StartupController {
         recentProjectsList.getItems().clear();
 
         for (String projectPath : settings.getRecentProjects()) {
-            if (Files.exists(Path.of(projectPath))) {
+            Path path = toPath(projectPath);
+            if (path != null && Files.exists(path)) {
                 recentProjectsList.getItems().add(projectPath);
             }
         }
@@ -57,7 +59,10 @@ public class StartupController {
             if (event.getClickCount() == 2) {
                 String selected = recentProjectsList.getSelectionModel().getSelectedItem();
                 if (selected != null) {
-                    openProject(Path.of(selected));
+                    Path path = toPath(selected);
+                    if (path != null) {
+                        openProject(path);
+                    }
                 }
             }
         });
@@ -66,8 +71,9 @@ public class StartupController {
     @FXML
     private void onLastProjectClick() {
         String lastPath = settings.getLastProjectPath();
-        if (lastPath != null) {
-            openProject(Path.of(lastPath));
+        Path path = toPath(lastPath);
+        if (path != null) {
+            openProject(path);
         }
     }
 
@@ -77,8 +83,9 @@ public class StartupController {
         chooser.setTitle("Open Project Folder");
 
         String lastPath = settings.getLastProjectPath();
-        if (lastPath != null) {
-            Path parent = Path.of(lastPath).getParent();
+        Path lastProjectPath = toPath(lastPath);
+        if (lastProjectPath != null) {
+            Path parent = lastProjectPath.getParent();
             if (parent != null && Files.exists(parent)) {
                 chooser.setInitialDirectory(parent.toFile());
             }
@@ -116,7 +123,9 @@ public class StartupController {
             Project project = Project.create(selectedDir.toPath(), title);
             app.showProjectView(project);
         } catch (IOException e) {
-            showError("Failed to Create Project", e.getMessage());
+            ErrorDialog.showDetailed("Failed to Create Project",
+                    "Could not create project at: " + selectedDir.getPath(),
+                    formatException(e));
         }
     }
 
@@ -125,7 +134,9 @@ public class StartupController {
             Project project = Project.loadFromFolder(path);
             app.showProjectView(project);
         } catch (IOException e) {
-            showError("Failed to Open Project", e.getMessage());
+            ErrorDialog.showDetailed("Failed to Open Project",
+                    "Could not open project at: " + path,
+                    formatException(e));
         }
     }
 
@@ -134,15 +145,67 @@ public class StartupController {
         try {
             app.showSettingsDialog();
         } catch (IOException e) {
-            showError("Failed to Open Settings", e.getMessage());
+            ErrorDialog.showDetailed("Failed to Open Settings",
+                    "Could not open the settings dialog.",
+                    formatException(e));
         }
     }
 
-    private void showError(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    private String formatException(Throwable e) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Error: ").append(e.getClass().getSimpleName()).append("\n");
+        sb.append("Message: ").append(e.getMessage()).append("\n\n");
+        sb.append("Stack Trace:\n");
+        for (StackTraceElement element : e.getStackTrace()) {
+            sb.append("  at ").append(element.toString()).append("\n");
+        }
+        if (e.getCause() != null) {
+            sb.append("\nCaused by: ").append(e.getCause().getClass().getSimpleName()).append("\n");
+            sb.append("Message: ").append(e.getCause().getMessage()).append("\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Converts a path string to a Path object, handling file: URI format if present.
+     * This is needed because paths might be stored as URIs in some cases.
+     */
+    private Path toPath(String pathString) {
+        if (pathString == null) {
+            return null;
+        }
+
+        // Handle file: URI format (e.g., "file:/C/Users/..." or "file:///C:/Users/...")
+        if (pathString.startsWith("file:")) {
+            try {
+                // Normalize the URI - some formats may be malformed
+                String normalized = pathString;
+
+                // Fix common malformed patterns:
+                // "file:/C/..." -> "file:///C:/..."
+                if (pathString.matches("file:/[A-Za-z]/.*")) {
+                    char drive = pathString.charAt(6);
+                    normalized = "file:///" + drive + ":/" + pathString.substring(8);
+                }
+                // "file://C/..." -> "file:///C:/..."
+                else if (pathString.matches("file://[A-Za-z]/.*")) {
+                    char drive = pathString.charAt(7);
+                    normalized = "file:///" + drive + ":/" + pathString.substring(9);
+                }
+
+                URI uri = new URI(normalized);
+                return Path.of(uri);
+            } catch (Exception e) {
+                // If URI parsing fails, try stripping the file: prefix
+                String stripped = pathString.replaceFirst("^file:/*", "");
+                // Add drive letter colon if missing on Windows (e.g., "C/Users" -> "C:/Users")
+                if (stripped.matches("[A-Za-z]/.*")) {
+                    stripped = stripped.charAt(0) + ":/" + stripped.substring(2);
+                }
+                return Path.of(stripped);
+            }
+        }
+
+        return Path.of(pathString);
     }
 }

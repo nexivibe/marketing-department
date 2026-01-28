@@ -27,7 +27,8 @@ public class ErrorDialog {
     }
 
     /**
-     * Show a detailed error dialog with full text that can be copied.
+     * Show a detailed error dialog with expandable/collapsible details section.
+     * Details are hidden by default behind a "Show Details" button.
      */
     public static void showDetailed(String title, String summary, String details) {
         Dialog<Void> dialog = new Dialog<>();
@@ -37,19 +38,27 @@ public class ErrorDialog {
 
         // Create content
         VBox content = new VBox(10);
-        content.setPadding(new Insets(10));
-        content.setPrefWidth(600);
-        content.setPrefHeight(400);
+        content.setPadding(new Insets(15));
+        content.setPrefWidth(500);
 
-        // Summary label
+        // Summary label (not selectable, brief description)
         Label summaryLabel = new Label(summary);
         summaryLabel.setWrapText(true);
-        summaryLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #c0392b;");
+        summaryLabel.setStyle("-fx-font-size: 14px;");
+
+        // Details section (initially hidden)
+        VBox detailsBox = new VBox(8);
+        detailsBox.setManaged(false);
+        detailsBox.setVisible(false);
+
+        Label detailsLabel = new Label("Error Details:");
+        detailsLabel.setStyle("-fx-font-weight: bold;");
 
         // Details text area
         TextArea detailsArea = new TextArea(details);
         detailsArea.setEditable(false);
         detailsArea.setWrapText(true);
+        detailsArea.setPrefRowCount(12);
         detailsArea.setStyle("-fx-font-family: 'Consolas', 'Monaco', monospace; -fx-font-size: 12px;");
         VBox.setVgrow(detailsArea, Priority.ALWAYS);
 
@@ -75,13 +84,24 @@ public class ErrorDialog {
             }).start();
         });
 
-        HBox buttonBox = new HBox(10);
-        buttonBox.getChildren().add(copyButton);
+        detailsBox.getChildren().addAll(detailsLabel, detailsArea, copyButton);
 
-        content.getChildren().addAll(summaryLabel, detailsArea, buttonBox);
+        // Toggle button for show/hide details
+        Button toggleButton = new Button("Show Details");
+        toggleButton.setOnAction(e -> {
+            boolean showing = detailsBox.isVisible();
+            detailsBox.setVisible(!showing);
+            detailsBox.setManaged(!showing);
+            toggleButton.setText(showing ? "Show Details" : "Hide Details");
+
+            // Resize dialog to fit content
+            dialog.getDialogPane().getScene().getWindow().sizeToScene();
+        });
+
+        content.getChildren().addAll(summaryLabel, toggleButton, detailsBox);
 
         dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.OK);
 
         dialog.showAndWait();
     }

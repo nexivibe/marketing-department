@@ -40,6 +40,7 @@ public class GrokService implements AiReviewService {
     private final AppSettings settings;
     private final HttpClient httpClient;
     private AiLogger logger;
+    private AiStatusListener statusListener;
 
     public GrokService(AppSettings settings) {
         this.settings = settings;
@@ -58,6 +59,22 @@ public class GrokService implements AiReviewService {
     @Override
     public String getServiceName() {
         return "grok";
+    }
+
+    @Override
+    public String getModel() {
+        return getConfiguredModel();
+    }
+
+    @Override
+    public void setStatusListener(AiStatusListener listener) {
+        this.statusListener = listener;
+    }
+
+    private void emitStatus(AiStatus status) {
+        if (statusListener != null) {
+            statusListener.onStatusChanged(status);
+        }
     }
 
     @Override
@@ -147,12 +164,17 @@ public class GrokService implements AiReviewService {
             if (logger != null) {
                 logger.logError("grok", error, null);
             }
+            emitStatus(AiStatus.error(null, error));
             return CompletableFuture.failedFuture(new IllegalStateException(error));
         }
 
         ApiKey apiKey = settings.getApiKeyForService("grok");
         String model = getConfiguredModel();
         String requestBody = buildRequestBody(model, systemPrompt, userContent);
+        long startTime = System.currentTimeMillis();
+
+        // Emit connecting status
+        emitStatus(AiStatus.of(AiStatus.State.CONNECTING, model));
 
         // Log the request
         if (logger != null) {
@@ -167,8 +189,14 @@ public class GrokService implements AiReviewService {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
+        // Emit sending status
+        emitStatus(AiStatus.of(AiStatus.State.SENDING, model));
+
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
+                    // Emit receiving status
+                    emitStatus(AiStatus.of(AiStatus.State.RECEIVING, model));
+
                     // Log the response
                     if (logger != null) {
                         logger.logResponse("grok", response.statusCode(), response.body());
@@ -176,6 +204,7 @@ public class GrokService implements AiReviewService {
 
                     if (response.statusCode() != 200) {
                         String errorDetail = parseErrorMessage(response.body());
+                        emitStatus(AiStatus.error(model, "HTTP " + response.statusCode() + ": " + errorDetail));
                         throw new AiServiceException(
                                 "Grok API Error",
                                 response.statusCode(),
@@ -184,11 +213,22 @@ public class GrokService implements AiReviewService {
                                 response.body()
                         );
                     }
-                    return parseResponse(response.body());
+
+                    // Emit processing status
+                    emitStatus(AiStatus.of(AiStatus.State.PROCESSING, model));
+                    String result = parseResponse(response.body());
+
+                    // Emit complete status
+                    emitStatus(AiStatus.complete(model, startTime));
+                    return result;
                 })
                 .exceptionally(ex -> {
                     if (logger != null && !(ex.getCause() instanceof AiServiceException)) {
                         logger.logError("grok", ex.getMessage(), ex);
+                    }
+                    // Emit error status if not already emitted
+                    if (!(ex.getCause() instanceof AiServiceException)) {
+                        emitStatus(AiStatus.error(model, ex.getMessage()));
                     }
                     if (ex.getCause() instanceof AiServiceException) {
                         throw (AiServiceException) ex.getCause();

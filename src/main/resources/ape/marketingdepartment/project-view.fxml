@@ -16,7 +16,7 @@
                 <Button text="New Post" onAction="#onNewPost"/>
                 <Button text="Refresh" onAction="#onRefreshPosts"/>
                 <Separator orientation="VERTICAL"/>
-                <Button fx:id="settingsToggleButton" text="Project Settings" onAction="#onToggleSettings"/>
+                <Button text="Project Settings" onAction="#onProjectSettings"/>
                 <Button text="App Settings" onAction="#onAppSettings"/>
             </ToolBar>
             <Label fx:id="projectTitleLabel"
@@ -35,37 +35,61 @@
                 <Label text="Posts" style="-fx-font-weight: bold; -fx-padding: 0 0 5 0;"/>
                 <ListView fx:id="postsListView" VBox.vgrow="ALWAYS"/>
 
-                <!-- Status action buttons -->
-                <HBox fx:id="statusButtonsBox" spacing="5" alignment="CENTER" visible="false" managed="false">
+                <!-- Post metadata (date, author, read time) -->
+                <HBox fx:id="postMetadataBox" spacing="15" alignment="CENTER_LEFT" visible="false" managed="false">
                     <padding>
                         <Insets top="10"/>
                     </padding>
+                    <HBox spacing="5" alignment="CENTER_LEFT">
+                        <Label text="Date:" style="-fx-font-weight: bold;"/>
+                        <DatePicker fx:id="postDatePicker" prefWidth="130" onAction="#onPostDateChanged"/>
+                    </HBox>
+                    <HBox spacing="5" alignment="CENTER_LEFT">
+                        <Label text="Author:" style="-fx-font-weight: bold;"/>
+                        <TextField fx:id="postAuthorField" prefWidth="150" promptText="(project default)" onAction="#onPostAuthorChanged"/>
+                    </HBox>
+                    <Label fx:id="readTimeLabel" text="" style="-fx-text-fill: #888; -fx-font-style: italic;"/>
+                </HBox>
+
+                <!-- Status action buttons -->
+                <HBox fx:id="statusButtonsBox" spacing="5" alignment="CENTER" visible="false" managed="false">
+                    <padding>
+                        <Insets top="5"/>
+                    </padding>
+                    <Button fx:id="rewriteButton" text="AI Rewrite" onAction="#onRewritePost" style="-fx-background-color: #9b59b6; -fx-text-fill: white;"/>
                     <Button fx:id="sendToReviewButton" text="Send to Review" onAction="#onSendToReview"/>
                     <Button fx:id="markFinishedButton" text="Mark Finished" onAction="#onMarkFinished"/>
                     <Button fx:id="reRequestReviewButton" text="Re-request Review" onAction="#onReRequestReview"/>
+                    <Button fx:id="reopenButton" text="Re-open" onAction="#onReopenPost" style="-fx-background-color: #e67e22; -fx-text-fill: white;"/>
                 </HBox>
             </VBox>
 
             <VBox VBox.vgrow="ALWAYS">
-                <!-- Preview area -->
-                <StackPane VBox.vgrow="ALWAYS">
-                    <padding>
-                        <Insets bottom="5" left="5" right="10" top="10"/>
-                    </padding>
-                    <WebView fx:id="markdownPreview"/>
-                    <Label fx:id="previewPlaceholder"
-                           text="Select a draft post to preview"
-                           style="-fx-text-fill: #888; -fx-font-size: 14px;"/>
-                </StackPane>
+                <!-- Content area: post preview and review side by side -->
+                <SplitPane fx:id="contentSplitPane" orientation="HORIZONTAL" dividerPositions="0.5" VBox.vgrow="ALWAYS">
+                    <!-- Post Preview Pane -->
+                    <VBox>
+                        <padding>
+                            <Insets bottom="5" left="5" right="5" top="10"/>
+                        </padding>
+                        <Label text="Post Content" style="-fx-font-weight: bold; -fx-padding: 0 0 5 0;"/>
+                        <StackPane VBox.vgrow="ALWAYS">
+                            <WebView fx:id="markdownPreview"/>
+                            <Label fx:id="previewPlaceholder"
+                                   text="Select a post to preview"
+                                   style="-fx-text-fill: #888; -fx-font-size: 14px;"/>
+                        </StackPane>
+                    </VBox>
 
-                <!-- Review panel area -->
-                <VBox fx:id="reviewPanelContainer" visible="false" managed="false" prefHeight="200">
-                    <padding>
-                        <Insets bottom="10" left="5" right="10" top="5"/>
-                    </padding>
-                    <Label text="Review Feedback" style="-fx-font-weight: bold; -fx-padding: 0 0 5 0;"/>
-                    <WebView fx:id="reviewWebView" VBox.vgrow="ALWAYS"/>
-                </VBox>
+                    <!-- Review Feedback Pane (hidden when no review) -->
+                    <VBox fx:id="reviewPanelContainer" visible="false" managed="false">
+                        <padding>
+                            <Insets bottom="5" left="5" right="10" top="10"/>
+                        </padding>
+                        <Label text="AI Review Feedback" style="-fx-font-weight: bold; -fx-text-fill: #e67e22; -fx-padding: 0 0 5 0;"/>
+                        <WebView fx:id="reviewWebView" VBox.vgrow="ALWAYS"/>
+                    </VBox>
+                </SplitPane>
 
                 <!-- Transform buttons -->
                 <HBox fx:id="transformButtonsBox" spacing="10" alignment="CENTER" visible="false" managed="false">
@@ -74,43 +98,19 @@
                     </padding>
                     <Button text="Transform for LinkedIn" onAction="#onTransformLinkedIn"/>
                     <Button text="Transform for X" onAction="#onTransformTwitter"/>
+                    <Separator orientation="VERTICAL"/>
+                    <Button text="Web Publishing" onAction="#onWebPublishing"
+                            style="-fx-background-color: #27ae60; -fx-text-fill: white;"/>
+                    <Button text="Edit Tags" onAction="#onEditTags"/>
                 </HBox>
             </VBox>
         </SplitPane>
     </center>
 
-    <!-- Collapsible settings panel at the bottom -->
+    <!-- AI Status Bar at the bottom -->
     <bottom>
-        <TitledPane fx:id="settingsPane" text="Project Settings" expanded="false" animated="true" visible="false" managed="false">
-            <VBox spacing="10">
-                <padding>
-                    <Insets bottom="10" left="10" right="10" top="10"/>
-                </padding>
-
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="AI Agent:" prefWidth="100"/>
-                    <ComboBox fx:id="agentComboBox" prefWidth="150"/>
-                </HBox>
-
-                <VBox spacing="5">
-                    <Label text="Reviewer Prompt:"/>
-                    <TextArea fx:id="reviewerPromptArea" prefRowCount="3" wrapText="true"/>
-                </VBox>
-
-                <VBox spacing="5">
-                    <Label text="LinkedIn Transform Prompt:"/>
-                    <TextArea fx:id="linkedinPromptArea" prefRowCount="2" wrapText="true"/>
-                </VBox>
-
-                <VBox spacing="5">
-                    <Label text="Twitter/X Transform Prompt:"/>
-                    <TextArea fx:id="twitterPromptArea" prefRowCount="2" wrapText="true"/>
-                </VBox>
-
-                <HBox alignment="CENTER_RIGHT">
-                    <Button text="Save Settings" onAction="#onSaveProjectSettings"/>
-                </HBox>
-            </VBox>
-        </TitledPane>
+        <HBox fx:id="aiStatusBarContainer" alignment="CENTER_LEFT" spacing="8" minHeight="30"
+              style="-fx-background-color: #f0f0f0; -fx-border-color: #ccc; -fx-border-width: 1 0 0 0;">
+        </HBox>
     </bottom>
 </BorderPane>

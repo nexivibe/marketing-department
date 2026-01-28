@@ -4,6 +4,8 @@ import ape.marketingdepartment.controller.ProjectController;
 import ape.marketingdepartment.controller.PublishingDialogController;
 import ape.marketingdepartment.controller.SettingsController;
 import ape.marketingdepartment.controller.StartupController;
+import ape.marketingdepartment.controller.TagEditorPopupController;
+import ape.marketingdepartment.controller.WebPublishingDialogController;
 import ape.marketingdepartment.model.AppSettings;
 import ape.marketingdepartment.model.Post;
 import ape.marketingdepartment.model.Project;
@@ -100,6 +102,40 @@ public class MarketingApp extends Application {
 
         PublishingDialogController controller = loader.getController();
         controller.initialize(dialogStage, settings, project, post, platform);
+
+        dialogStage.showAndWait();
+    }
+
+    public void showWebPublishingDialog(Project project, Post post) throws IOException {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("web-publishing-dialog.fxml"));
+        Parent root = loader.load();
+
+        Stage dialogStage = new Stage();
+        dialogStage.setTitle("Web Publishing - " + post.getTitle());
+        dialogStage.initModality(Modality.WINDOW_MODAL);
+        dialogStage.initOwner(primaryStage);
+        dialogStage.setScene(new Scene(root));
+        dialogStage.setResizable(true);
+
+        WebPublishingDialogController controller = loader.getController();
+        controller.initialize(dialogStage, settings, project, post);
+
+        dialogStage.showAndWait();
+    }
+
+    public void showTagEditorPopup(Project project, Post post) throws IOException {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("tag-editor-popup.fxml"));
+        Parent root = loader.load();
+
+        Stage dialogStage = new Stage();
+        dialogStage.setTitle("Edit Tags - " + post.getTitle());
+        dialogStage.initModality(Modality.WINDOW_MODAL);
+        dialogStage.initOwner(primaryStage);
+        dialogStage.setScene(new Scene(root));
+        dialogStage.setResizable(false);
+
+        TagEditorPopupController controller = loader.getController();
+        controller.initialize(dialogStage, settings, project, post);
 
         dialogStage.showAndWait();
     }

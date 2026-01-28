@@ -14,6 +14,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.web.WebView;
 
+import java.time.LocalDate;
+
 import java.io.IOException;
 import java.util.Optional;
 
@@ -23,26 +25,32 @@ public class ProjectController {
     @FXML private WebView markdownPreview;
     @FXML private Label previewPlaceholder;
 
-    // Settings panel
-    @FXML private Button settingsToggleButton;
-    @FXML private TitledPane settingsPane;
-    @FXML private ComboBox<String> agentComboBox;
-    @FXML private TextArea reviewerPromptArea;
-    @FXML private TextArea linkedinPromptArea;
-    @FXML private TextArea twitterPromptArea;
+
+    // Post metadata
+    @FXML private HBox postMetadataBox;
+    @FXML private DatePicker postDatePicker;
+    @FXML private TextField postAuthorField;
+    @FXML private Label readTimeLabel;
 
     // Status buttons
     @FXML private HBox statusButtonsBox;
+    @FXML private Button rewriteButton;
     @FXML private Button sendToReviewButton;
     @FXML private Button markFinishedButton;
     @FXML private Button reRequestReviewButton;
+    @FXML private Button reopenButton;
 
     // Review panel
+    @FXML private SplitPane contentSplitPane;
     @FXML private VBox reviewPanelContainer;
     @FXML private WebView reviewWebView;
 
     // Transform buttons
     @FXML private HBox transformButtonsBox;
+
+    // AI Status Bar
+    @FXML private HBox aiStatusBarContainer;
+    private AiStatusBar aiStatusBar;
 
     private MarketingApp app;
     private Project project;
@@ -61,10 +69,16 @@ public class ProjectController {
         projectTitleLabel.setText(project.getTitle());
 
         setupPostsList();
-        setupSettingsPanel();
+        setupAiStatusBar();
         refreshPosts();
         showPreviewPlaceholder();
         updateStatusButtons(null);
+    }
+
+    private void setupAiStatusBar() {
+        aiStatusBar = new AiStatusBar();
+        aiStatusBarContainer.getChildren().clear();
+        aiStatusBarContainer.getChildren().add(aiStatusBar);
     }
 
     private void setupPostsList() {
@@ -96,20 +110,6 @@ public class ProjectController {
         });
     }
 
-    private void setupSettingsPanel() {
-        // Initialize agent combo box (only if empty to avoid duplicates on refresh)
-        if (agentComboBox.getItems().isEmpty()) {
-            agentComboBox.getItems().addAll("grok");
-        }
-
-        // Load current settings
-        ProjectSettings settings = project.getSettings();
-        agentComboBox.setValue(settings.getSelectedAgent());
-        reviewerPromptArea.setText(settings.getReviewerPrompt());
-        linkedinPromptArea.setText(settings.getPlatformPrompt("linkedin"));
-        twitterPromptArea.setText(settings.getPlatformPrompt("twitter"));
-    }
-
     private void refreshPosts() {
         Post selected = postsListView.getSelectionModel().getSelectedItem();
         postsListView.getItems().clear();
@@ -127,10 +127,82 @@ public class ProjectController {
     }
 
     private void onPostSelected(Post post) {
+        updatePostMetadata(post);
         updateStatusButtons(post);
         showMarkdownPreview(post);
         updateReviewPanel(post);
         updateTransformButtons(post);
+    }
+
+    private void updatePostMetadata(Post post) {
+        if (post == null) {
+            postMetadataBox.setVisible(false);
+            postMetadataBox.setManaged(false);
+            return;
+        }
+
+        postMetadataBox.setVisible(true);
+        postMetadataBox.setManaged(true);
+
+        // Set date
+        postDatePicker.setValue(post.getDate());
+
+        // Set author (show empty if using project default)
+        String author = post.getAuthor();
+        postAuthorField.setText(author != null ? author : "");
+
+        // Update prompt text to show project default
+        String defaultAuthor = project.getSettings().getDefaultAuthor();
+        if (defaultAuthor != null && !defaultAuthor.isEmpty()) {
+            postAuthorField.setPromptText("Default: " + defaultAuthor);
+        } else {
+            postAuthorField.setPromptText("(no default set)");
+        }
+
+        // Show read time
+        readTimeLabel.setText(post.getReadTimeDisplay());
+    }
+
+    @FXML
+    private void onPostDateChanged() {
+        Post selected = postsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        LocalDate newDate = postDatePicker.getValue();
+        selected.setDate(newDate);
+
+        try {
+            selected.save();
+        } catch (IOException e) {
+            showError("Failed to Save Date", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onPostAuthorChanged() {
+        Post selected = postsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        String author = postAuthorField.getText().trim();
+        // Set to null if empty (use project default)
+        selected.setAuthor(author.isEmpty() ? null : author);
+
+        try {
+            selected.save();
+        } catch (IOException e) {
+            showError("Failed to Save Author", e.getMessage());
+        }
+    }
+
+    /**
+     * Get the effective author for a post (post author or project default).
+     */
+    public String getEffectiveAuthor(Post post) {
+        String author = post.getAuthor();
+        if (author != null && !author.isEmpty()) {
+            return author;
+        }
+        return project.getSettings().getDefaultAuthor();
     }
 
     private void updateStatusButtons(Post post) {
@@ -145,30 +217,40 @@ public class ProjectController {
 
         switch (post.getStatus()) {
             case DRAFT -> {
+                rewriteButton.setVisible(true);
+                rewriteButton.setManaged(true);
                 sendToReviewButton.setVisible(true);
                 sendToReviewButton.setManaged(true);
                 markFinishedButton.setVisible(false);
                 markFinishedButton.setManaged(false);
                 reRequestReviewButton.setVisible(false);
                 reRequestReviewButton.setManaged(false);
+                reopenButton.setVisible(false);
+                reopenButton.setManaged(false);
             }
             case REVIEW -> {
+                rewriteButton.setVisible(true);
+                rewriteButton.setManaged(true);
                 sendToReviewButton.setVisible(false);
                 sendToReviewButton.setManaged(false);
                 markFinishedButton.setVisible(true);
                 markFinishedButton.setManaged(true);
                 reRequestReviewButton.setVisible(true);
                 reRequestReviewButton.setManaged(true);
+                reopenButton.setVisible(false);
+                reopenButton.setManaged(false);
             }
             case FINISHED -> {
+                rewriteButton.setVisible(false);
+                rewriteButton.setManaged(false);
                 sendToReviewButton.setVisible(false);
                 sendToReviewButton.setManaged(false);
                 markFinishedButton.setVisible(false);
                 markFinishedButton.setManaged(false);
                 reRequestReviewButton.setVisible(false);
                 reRequestReviewButton.setManaged(false);
-                statusButtonsBox.setVisible(false);
-                statusButtonsBox.setManaged(false);
+                reopenButton.setVisible(true);
+                reopenButton.setManaged(true);
             }
         }
     }
@@ -179,11 +261,17 @@ public class ProjectController {
         ReviewResult review = ReviewResult.load(project.getPostsDirectory(), post.getName(), agent);
 
         if (review != null && review.getReviewContent() != null) {
-            // Show review panel with content
+            // Show review panel with content - add to split pane if not already there
+            if (!contentSplitPane.getItems().contains(reviewPanelContainer)) {
+                contentSplitPane.getItems().add(reviewPanelContainer);
+                contentSplitPane.setDividerPositions(0.5);
+            }
             reviewPanelContainer.setVisible(true);
             reviewPanelContainer.setManaged(true);
             displayReviewContent(review.getReviewContent());
         } else {
+            // Hide review panel - remove from split pane
+            contentSplitPane.getItems().remove(reviewPanelContainer);
             reviewPanelContainer.setVisible(false);
             reviewPanelContainer.setManaged(false);
         }
@@ -295,7 +383,7 @@ public class ProjectController {
             previewPlaceholder.setVisible(false);
             previewPlaceholder.setManaged(false);
         } catch (IOException e) {
-            showError("Failed to Load Post", e.getMessage());
+            showError("Failed to Load Post", "Could not load the selected post.", e);
         }
     }
 
@@ -311,30 +399,50 @@ public class ProjectController {
         } else {
             previewPlaceholder.setText("Select a post to preview");
         }
+
+        // Also hide review panel and metadata
+        hideReviewPanel();
+        postMetadataBox.setVisible(false);
+        postMetadataBox.setManaged(false);
+    }
+
+    private void hideReviewPanel() {
+        contentSplitPane.getItems().remove(reviewPanelContainer);
+        reviewPanelContainer.setVisible(false);
+        reviewPanelContainer.setManaged(false);
     }
 
     @FXML
-    private void onToggleSettings() {
-        boolean isVisible = settingsPane.isVisible();
-        settingsPane.setVisible(!isVisible);
-        settingsPane.setManaged(!isVisible);
-        if (!isVisible) {
-            settingsPane.setExpanded(true);
-        }
-    }
-
-    @FXML
-    private void onSaveProjectSettings() {
+    private void onProjectSettings() {
         try {
-            ProjectSettings settings = project.getSettings();
-            settings.setSelectedAgent(agentComboBox.getValue());
-            settings.setReviewerPrompt(reviewerPromptArea.getText());
-            settings.setPlatformPrompt("linkedin", linkedinPromptArea.getText());
-            settings.setPlatformPrompt("twitter", twitterPromptArea.getText());
-            project.saveSettings();
-            showInfo("Settings Saved", "Project settings have been saved.");
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
+                    getClass().getResource("/ape/marketingdepartment/project-settings-dialog.fxml"));
+            VBox dialogContent = loader.load();
+
+            ProjectSettingsDialogController controller = loader.getController();
+
+            javafx.stage.Stage dialogStage = new javafx.stage.Stage();
+            dialogStage.setTitle("Project Settings - " + project.getTitle());
+            dialogStage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+            dialogStage.initOwner(postsListView.getScene().getWindow());
+
+            javafx.scene.Scene scene = new javafx.scene.Scene(dialogContent);
+            dialogStage.setScene(scene);
+
+            controller.setDialogStage(dialogStage);
+            controller.setProject(project);
+
+            dialogStage.showAndWait();
+
+            // Refresh UI if settings were saved (author may have changed)
+            if (controller.isSaved()) {
+                Post selected = postsListView.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    updatePostMetadata(selected);
+                }
+            }
         } catch (IOException e) {
-            showError("Failed to Save Settings", e.getMessage());
+            showError("Failed to Open Settings", e.getMessage());
         }
     }
 
@@ -386,6 +494,9 @@ public class ProjectController {
 
         // Set project directory for logging
         service.setProjectDir(project.getPath());
+
+        // Set status listener for real-time status updates
+        service.setStatusListener(aiStatusBar);
 
         // Show progress indication
         sendToReviewButton.setDisable(true);
@@ -459,6 +570,28 @@ public class ProjectController {
     }
 
     @FXML
+    private void onReopenPost() {
+        Post selected = postsListView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getStatus() != PostStatus.FINISHED) {
+            return;
+        }
+
+        selected.setStatus(PostStatus.REVIEW);
+        try {
+            selected.save();
+            refreshPosts();
+            for (Post post : postsListView.getItems()) {
+                if (post.getName().equals(selected.getName())) {
+                    postsListView.getSelectionModel().select(post);
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            showError("Failed to Update Status", e.getMessage());
+        }
+    }
+
+    @FXML
     private void onReRequestReview() {
         Post selected = postsListView.getSelectionModel().getSelectedItem();
         if (selected == null || selected.getStatus() != PostStatus.REVIEW) {
@@ -467,6 +600,88 @@ public class ProjectController {
 
         // Trigger a new AI review
         requestAiReview(selected);
+    }
+
+    @FXML
+    private void onRewritePost() {
+        Post selected = postsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            return;
+        }
+
+        // Check if AI service is configured
+        String agentName = project.getSettings().getSelectedAgent();
+        if (!aiServiceFactory.isServiceAvailable(agentName)) {
+            showError("AI Service Not Configured",
+                    "Please add your " + agentName + " API key in Settings before rewriting.");
+            return;
+        }
+
+        // Get the AI service
+        AiReviewService service = aiServiceFactory.getService(agentName);
+        if (service == null || !service.isConfigured()) {
+            showError("AI Service Error", "AI service not properly configured.");
+            return;
+        }
+
+        // Set project directory for logging and status listener
+        service.setProjectDir(project.getPath());
+        service.setStatusListener(aiStatusBar);
+
+        // Disable button during processing
+        rewriteButton.setDisable(true);
+
+        try {
+            String originalContent = selected.getMarkdownContent();
+            String rewritePrompt = project.getSettings().getRewritePrompt();
+
+            service.transformContent(rewritePrompt, originalContent)
+                    .thenAccept(rewrittenContent -> {
+                        Platform.runLater(() -> {
+                            rewriteButton.setDisable(false);
+
+                            // Show preview dialog
+                            RewritePreviewDialog previewDialog = new RewritePreviewDialog(
+                                    originalContent, rewrittenContent);
+
+                            boolean confirmed = previewDialog.showAndWait(
+                                    (javafx.stage.Stage) postsListView.getScene().getWindow());
+
+                            if (confirmed) {
+                                try {
+                                    // Apply the rewrite
+                                    selected.setMarkdownContent(rewrittenContent);
+
+                                    // Refresh the view to show updated content and title
+                                    onRefreshPosts();
+
+                                    // Re-select the post
+                                    for (Post post : postsListView.getItems()) {
+                                        if (post.getName().equals(selected.getName())) {
+                                            postsListView.getSelectionModel().select(post);
+                                            break;
+                                        }
+                                    }
+
+                                    showInfo("Rewrite Applied", "The post has been updated with the AI rewrite.");
+                                } catch (IOException e) {
+                                    showError("Failed to Save Rewrite", e.getMessage());
+                                }
+                            }
+                        });
+                    })
+                    .exceptionally(ex -> {
+                        Platform.runLater(() -> {
+                            rewriteButton.setDisable(false);
+                            ErrorDialog.showAiError(ex);
+                        });
+                        return null;
+                    });
+
+        } catch (IOException e) {
+            rewriteButton.setDisable(false);
+            showError("Failed to Load Post Content", e.getMessage());
+        }
     }
 
     @FXML
@@ -494,6 +709,34 @@ public class ProjectController {
             app.showPublishingDialog(project, selected, "twitter");
         } catch (IOException e) {
             showError("Failed to Open Publishing Dialog", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onWebPublishing() {
+        Post selected = postsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            return;
+        }
+        try {
+            app.showWebPublishingDialog(project, selected);
+        } catch (IOException e) {
+            showError("Failed to Open Web Publishing Dialog", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onEditTags() {
+        Post selected = postsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            return;
+        }
+        try {
+            app.showTagEditorPopup(project, selected);
+            // Refresh the post to show updated tags
+            onPostSelected(selected);
+        } catch (IOException e) {
+            showError("Failed to Open Tag Editor", e.getMessage());
         }
     }
 
@@ -541,7 +784,6 @@ public class ProjectController {
             Project reloaded = Project.loadFromFolder(project.getPath());
             this.project = reloaded;
             projectTitleLabel.setText(project.getTitle());
-            setupSettingsPanel(); // Reload settings
 
             // Refresh and try to re-select
             postsListView.getItems().clear();
@@ -561,8 +803,7 @@ public class ProjectController {
             showPreviewPlaceholder();
             updateStatusButtons(null);
             updateTransformButtons(null);
-            reviewPanelContainer.setVisible(false);
-            reviewPanelContainer.setManaged(false);
+            hideReviewPanel();
         } catch (IOException e) {
             showError("Failed to Refresh", e.getMessage());
         }
@@ -587,11 +828,22 @@ public class ProjectController {
     }
 
     private void showError(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        ErrorDialog.showDetailed(title, title, message);
+    }
+
+    private void showError(String title, String summary, Throwable e) {
+        StringBuilder details = new StringBuilder();
+        details.append("Error: ").append(e.getClass().getSimpleName()).append("\n");
+        details.append("Message: ").append(e.getMessage()).append("\n\n");
+        details.append("Stack Trace:\n");
+        for (StackTraceElement element : e.getStackTrace()) {
+            details.append("  at ").append(element.toString()).append("\n");
+        }
+        if (e.getCause() != null) {
+            details.append("\nCaused by: ").append(e.getCause().getClass().getSimpleName()).append("\n");
+            details.append("Message: ").append(e.getCause().getMessage()).append("\n");
+        }
+        ErrorDialog.showDetailed(title, summary, details.toString());
     }
 
     private void showInfo(String title, String message) {

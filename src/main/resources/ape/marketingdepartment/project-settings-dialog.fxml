@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="ape.marketingdepartment.controller.ProjectSettingsDialogController"
+      spacing="10" prefWidth="550" prefHeight="500">
+    <padding>
+        <Insets bottom="15" left="15" right="15" top="15"/>
+    </padding>
+
+    <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS" style="-fx-background-color: transparent;">
+        <VBox spacing="15">
+            <padding>
+                <Insets bottom="10" left="5" right="15" top="5"/>
+            </padding>
+
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="AI Agent:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                <ComboBox fx:id="agentComboBox" prefWidth="200"/>
+            </HBox>
+
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="Default Author:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                <TextField fx:id="defaultAuthorField" prefWidth="300" promptText="Enter default author name"/>
+            </HBox>
+
+            <Separator/>
+
+            <VBox spacing="5">
+                <Label text="Reviewer Prompt:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="reviewerPromptArea" prefRowCount="4" wrapText="true"/>
+            </VBox>
+
+            <VBox spacing="5">
+                <Label text="Rewrite Prompt:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="rewritePromptArea" prefRowCount="4" wrapText="true"/>
+            </VBox>
+
+            <Separator/>
+
+            <VBox spacing="5">
+                <Label text="LinkedIn Transform Prompt:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="linkedinPromptArea" prefRowCount="3" wrapText="true"/>
+            </VBox>
+
+            <VBox spacing="5">
+                <Label text="Twitter/X Transform Prompt:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="twitterPromptArea" prefRowCount="3" wrapText="true"/>
+            </VBox>
+
+            <Separator/>
+
+            <Label text="Web Publishing" style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
+
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="URL Base:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                <TextField fx:id="urlBaseField" prefWidth="300" promptText="https://example.com"/>
+            </HBox>
+
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="Template File:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                <TextField fx:id="postTemplateField" prefWidth="300" promptText="post-template.html"/>
+            </HBox>
+
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="Export Directory:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                <TextField fx:id="webExportDirField" prefWidth="300" promptText="./public"/>
+            </HBox>
+
+            <VBox spacing="5">
+                <Label text="Tag Suggestion Prompt:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="tagSuggestionPromptArea" prefRowCount="3" wrapText="true"
+                          promptText="Prompt for AI to suggest SEO-optimized tags"/>
+            </VBox>
+
+            <VBox spacing="5">
+                <Label text="URI Suggestion Prompt:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="uriSuggestionPromptArea" prefRowCount="3" wrapText="true"
+                          promptText="Prompt for AI to suggest SEO-friendly URL slugs"/>
+            </VBox>
+        </VBox>
+    </ScrollPane>
+
+    <Separator/>
+
+    <HBox spacing="10" alignment="CENTER_RIGHT">
+        <Button fx:id="cancelButton" text="Cancel" prefWidth="80"/>
+        <Button fx:id="saveButton" text="Save" prefWidth="80" style="-fx-font-weight: bold;"/>
+    </HBox>
+</VBox>

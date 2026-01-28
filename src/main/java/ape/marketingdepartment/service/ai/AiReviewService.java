@@ -14,6 +14,20 @@ public interface AiReviewService {
     String getServiceName();
 
     /**
+     * Get the model being used.
+     */
+    default String getModel() {
+        return getServiceName();
+    }
+
+    /**
+     * Set a status listener for real-time status updates.
+     */
+    default void setStatusListener(AiStatusListener listener) {
+        // Default implementation does nothing
+    }
+
+    /**
      * Request a review of the given content using the specified system prompt.
      *
      * @param systemPrompt The reviewer prompt (instructions for the AI)

@@ -7,7 +7,13 @@
       "Bash(unzip:*)",
       "Bash(timeout 10 mvn javafx:run:*)",
       "Bash(timeout 8 mvn javafx:run:*)",
-      "Bash(mvn compile:*)"
+      "Bash(mvn compile:*)",
+      "Bash(mvn dependency:resolve:*)",
+      "Bash(jar --describe-module:*)",
+      "Bash(ls:*)",
+      "Bash(mvn package:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ]
   }
 }
