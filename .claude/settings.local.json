@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn clean:*)",
+      "Bash(java -version:*)",
+      "Bash(mvn dependency:tree:*)",
+      "Bash(unzip:*)",
+      "Bash(timeout 10 mvn javafx:run:*)",
+      "Bash(timeout 8 mvn javafx:run:*)"
+    ]
+  }
+}

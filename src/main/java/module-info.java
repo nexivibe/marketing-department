@@ -1,0 +1,20 @@
+module ape.marketingdepartment {
+    requires javafx.controls;
+    requires javafx.fxml;
+    requires javafx.web;
+
+    requires org.controlsfx.controls;
+    requires com.dlsc.formsfx;
+    requires org.kordamp.bootstrapfx.core;
+
+    requires flexmark;
+    requires flexmark.util.ast;
+    requires flexmark.util.data;
+
+    opens ape.marketingdepartment to javafx.fxml;
+    opens ape.marketingdepartment.controller to javafx.fxml;
+
+    exports ape.marketingdepartment;
+    exports ape.marketingdepartment.model;
+    exports ape.marketingdepartment.controller;
+}
