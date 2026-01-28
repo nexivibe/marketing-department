@@ -1,5 +1,7 @@
 package ape.marketingdepartment.model;
 
+import ape.marketingdepartment.service.JsonHelper;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,11 +16,13 @@ public class Project {
     private final Path path;
     private String title;
     private final List<Post> posts;
+    private ProjectSettings settings;
 
     private Project(Path path, String title) {
         this.path = path;
         this.title = title;
         this.posts = new ArrayList<>();
+        this.settings = new ProjectSettings();
     }
 
     public Path getPath() {
@@ -31,6 +35,14 @@ public class Project {
 
     public List<Post> getPosts() {
         return posts;
+    }
+
+    public ProjectSettings getSettings() {
+        return settings;
+    }
+
+    public void saveSettings() throws IOException {
+        settings.save(path);
     }
 
     public Path getPostsDirectory() {
@@ -50,6 +62,7 @@ public class Project {
         }
 
         Project project = new Project(folder, title);
+        project.settings = ProjectSettings.load(folder);
         project.loadPosts();
         return project;
     }
@@ -65,7 +78,7 @@ public class Project {
         Files.createDirectories(folder);
         Files.createDirectories(folder.resolve(POSTS_DIR));
 
-        String projectJson = "{\n  \"title\": \"" + escapeJson(title) + "\"\n}";
+        String projectJson = "{\n  \"title\": " + JsonHelper.toJsonString(title) + "\n}";
         Files.writeString(folder.resolve(PROJECT_FILE), projectJson);
 
         return new Project(folder, title);
@@ -106,43 +119,6 @@ public class Project {
     }
 
     private static String extractTitle(String json) {
-        int titleStart = json.indexOf("\"title\"");
-        if (titleStart == -1) return null;
-
-        int colonPos = json.indexOf(':', titleStart);
-        if (colonPos == -1) return null;
-
-        int valueStart = json.indexOf('"', colonPos);
-        if (valueStart == -1) return null;
-
-        int valueEnd = findClosingQuote(json, valueStart + 1);
-        if (valueEnd == -1) return null;
-
-        return unescapeJson(json.substring(valueStart + 1, valueEnd));
-    }
-
-    private static int findClosingQuote(String json, int start) {
-        for (int i = start; i < json.length(); i++) {
-            if (json.charAt(i) == '"' && json.charAt(i - 1) != '\\') {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static String unescapeJson(String s) {
-        return s.replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t");
-    }
-
-    private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        return JsonHelper.extractStringField(json, "title");
     }
 }

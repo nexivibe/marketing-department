@@ -57,6 +57,17 @@
                         onAction="#onCreateProjectClick"
                         prefWidth="150"/>
             </HBox>
+
+            <HBox alignment="CENTER">
+                <padding>
+                    <Insets top="30"/>
+                </padding>
+
+                <Button fx:id="settingsButton"
+                        text="Settings"
+                        onAction="#onSettingsClick"
+                        style="-fx-font-size: 12px;"/>
+            </HBox>
         </VBox>
     </center>
 </BorderPane>

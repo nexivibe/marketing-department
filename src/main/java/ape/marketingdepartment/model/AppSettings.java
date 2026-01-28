@@ -1,5 +1,7 @@
 package ape.marketingdepartment.model;
 
+import ape.marketingdepartment.service.JsonHelper;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,9 +15,19 @@ public class AppSettings {
 
     private String lastProjectPath;
     private List<String> recentProjects;
+    private List<ApiKey> apiKeys;
+    private List<PublishingProfile> publishingProfiles;
+    private BrowserSettings browserSettings;
+    private List<GrokModel> cachedGrokModels;
+    private String selectedGrokModel;
 
     public AppSettings() {
         this.recentProjects = new ArrayList<>();
+        this.apiKeys = new ArrayList<>();
+        this.publishingProfiles = new ArrayList<>();
+        this.browserSettings = new BrowserSettings();
+        this.cachedGrokModels = new ArrayList<>();
+        this.selectedGrokModel = "grok-2"; // Default model
     }
 
     public String getLastProjectPath() {
@@ -28,6 +40,72 @@ public class AppSettings {
 
     public List<String> getRecentProjects() {
         return recentProjects;
+    }
+
+    public List<ApiKey> getApiKeys() {
+        return apiKeys;
+    }
+
+    public void addApiKey(ApiKey apiKey) {
+        apiKeys.removeIf(k -> k.getService().equals(apiKey.getService()));
+        apiKeys.add(apiKey);
+    }
+
+    public void removeApiKey(ApiKey apiKey) {
+        apiKeys.remove(apiKey);
+    }
+
+    public ApiKey getApiKeyForService(String service) {
+        return apiKeys.stream()
+                .filter(k -> k.getService().equalsIgnoreCase(service))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public List<PublishingProfile> getPublishingProfiles() {
+        return publishingProfiles;
+    }
+
+    public void addPublishingProfile(PublishingProfile profile) {
+        publishingProfiles.add(profile);
+    }
+
+    public void removePublishingProfile(PublishingProfile profile) {
+        publishingProfiles.remove(profile);
+    }
+
+    public List<PublishingProfile> getProfilesForPlatform(String platform) {
+        return publishingProfiles.stream()
+                .filter(p -> p.getPlatform().equalsIgnoreCase(platform))
+                .toList();
+    }
+
+    public BrowserSettings getBrowserSettings() {
+        return browserSettings;
+    }
+
+    public void setBrowserSettings(BrowserSettings browserSettings) {
+        this.browserSettings = browserSettings;
+    }
+
+    public List<GrokModel> getCachedGrokModels() {
+        return cachedGrokModels;
+    }
+
+    public void setCachedGrokModels(List<GrokModel> models) {
+        this.cachedGrokModels = new ArrayList<>(models);
+    }
+
+    public String getSelectedGrokModel() {
+        return selectedGrokModel;
+    }
+
+    public void setSelectedGrokModel(String model) {
+        this.selectedGrokModel = model;
+    }
+
+    public static Path getSettingsDirectory() {
+        return SETTINGS_DIR;
     }
 
     public void addRecentProject(String projectPath) {
@@ -65,89 +143,92 @@ public class AppSettings {
     private static AppSettings parseJson(String json) {
         AppSettings settings = new AppSettings();
 
-        String lastPath = extractStringField(json, "lastProjectPath");
+        String lastPath = JsonHelper.extractStringField(json, "lastProjectPath");
         if (lastPath != null) {
             settings.lastProjectPath = lastPath;
         }
 
-        int recentStart = json.indexOf("\"recentProjects\"");
-        if (recentStart != -1) {
-            int arrayStart = json.indexOf('[', recentStart);
-            int arrayEnd = json.indexOf(']', arrayStart);
-            if (arrayStart != -1 && arrayEnd != -1) {
-                String arrayContent = json.substring(arrayStart + 1, arrayEnd);
-                String[] parts = arrayContent.split(",");
-                for (String part : parts) {
-                    String trimmed = part.trim();
-                    if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-                        settings.recentProjects.add(unescapeJson(trimmed.substring(1, trimmed.length() - 1)));
-                    }
-                }
-            }
+        // Parse recent projects
+        List<String> recentPaths = JsonHelper.extractStringArray(json, "recentProjects");
+        settings.recentProjects.addAll(recentPaths);
+
+        // Parse API keys
+        List<String> apiKeyJsons = JsonHelper.extractObjectArray(json, "apiKeys");
+        for (String apiKeyJson : apiKeyJsons) {
+            settings.apiKeys.add(ApiKey.fromJson(apiKeyJson));
+        }
+
+        // Parse publishing profiles
+        List<String> profileJsons = JsonHelper.extractObjectArray(json, "publishingProfiles");
+        for (String profileJson : profileJsons) {
+            settings.publishingProfiles.add(PublishingProfile.fromJson(profileJson));
+        }
+
+        // Parse browser settings
+        String browserJson = JsonHelper.extractObjectField(json, "browserSettings");
+        if (browserJson != null) {
+            settings.browserSettings = BrowserSettings.fromJson(browserJson);
+        }
+
+        // Parse cached Grok models
+        List<String> modelJsons = JsonHelper.extractObjectArray(json, "cachedGrokModels");
+        for (String modelJson : modelJsons) {
+            settings.cachedGrokModels.add(GrokModel.fromJson(modelJson));
+        }
+
+        // Parse selected Grok model
+        String selectedModel = JsonHelper.extractStringField(json, "selectedGrokModel");
+        if (selectedModel != null) {
+            settings.selectedGrokModel = selectedModel;
         }
 
         return settings;
     }
 
-    private static String extractStringField(String json, String fieldName) {
-        String pattern = "\"" + fieldName + "\"";
-        int fieldStart = json.indexOf(pattern);
-        if (fieldStart == -1) return null;
-
-        int colonPos = json.indexOf(':', fieldStart);
-        if (colonPos == -1) return null;
-
-        int valueStart = json.indexOf('"', colonPos);
-        if (valueStart == -1) return null;
-
-        int valueEnd = findClosingQuote(json, valueStart + 1);
-        if (valueEnd == -1) return null;
-
-        return unescapeJson(json.substring(valueStart + 1, valueEnd));
-    }
-
-    private static int findClosingQuote(String json, int start) {
-        for (int i = start; i < json.length(); i++) {
-            if (json.charAt(i) == '"' && json.charAt(i - 1) != '\\') {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static String unescapeJson(String s) {
-        return s.replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t");
-    }
-
     private String toJson() {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
-        sb.append("  \"lastProjectPath\": ");
-        if (lastProjectPath != null) {
-            sb.append("\"").append(escapeJson(lastProjectPath)).append("\"");
-        } else {
-            sb.append("null");
-        }
-        sb.append(",\n");
+        sb.append("  \"lastProjectPath\": ").append(JsonHelper.toJsonString(lastProjectPath)).append(",\n");
+
+        // Recent projects
         sb.append("  \"recentProjects\": [");
         for (int i = 0; i < recentProjects.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append("\"").append(escapeJson(recentProjects.get(i))).append("\"");
+            sb.append(JsonHelper.toJsonString(recentProjects.get(i)));
         }
-        sb.append("]\n");
+        sb.append("],\n");
+
+        // API keys
+        sb.append("  \"apiKeys\": [\n");
+        for (int i = 0; i < apiKeys.size(); i++) {
+            if (i > 0) sb.append(",\n");
+            sb.append("    ").append(apiKeys.get(i).toJson());
+        }
+        sb.append("\n  ],\n");
+
+        // Publishing profiles
+        sb.append("  \"publishingProfiles\": [\n");
+        for (int i = 0; i < publishingProfiles.size(); i++) {
+            if (i > 0) sb.append(",\n");
+            sb.append("    ").append(publishingProfiles.get(i).toJson());
+        }
+        sb.append("\n  ],\n");
+
+        // Browser settings
+        sb.append("  \"browserSettings\": ").append(browserSettings.toJson()).append(",\n");
+
+        // Cached Grok models
+        sb.append("  \"cachedGrokModels\": [\n");
+        for (int i = 0; i < cachedGrokModels.size(); i++) {
+            if (i > 0) sb.append(",\n");
+            sb.append("    ").append(cachedGrokModels.get(i).toJson());
+        }
+        sb.append("\n  ],\n");
+
+        // Selected Grok model
+        sb.append("  \"selectedGrokModel\": ").append(JsonHelper.toJsonString(selectedGrokModel)).append("\n");
+
         sb.append("}");
         return sb.toString();
-    }
-
-    private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 }

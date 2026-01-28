@@ -1,5 +1,7 @@
 package ape.marketingdepartment.model;
 
+import ape.marketingdepartment.service.JsonHelper;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -65,16 +67,13 @@ public class Post {
 
         if (Files.exists(metadataPath)) {
             String metaContent = Files.readString(metadataPath);
-            String extractedTitle = extractStringField(metaContent, "title");
+            String extractedTitle = JsonHelper.extractStringField(metaContent, "title");
             if (extractedTitle != null) {
                 title = extractedTitle;
             }
-            String statusStr = extractStringField(metaContent, "status");
+            String statusStr = JsonHelper.extractStringField(metaContent, "status");
             if (statusStr != null) {
-                try {
-                    status = PostStatus.valueOf(statusStr.toUpperCase());
-                } catch (IllegalArgumentException ignored) {
-                }
+                status = PostStatus.fromString(statusStr);
             }
         }
 
@@ -104,52 +103,10 @@ public class Post {
 
     private void saveMetadata() throws IOException {
         String json = "{\n" +
-                "  \"title\": \"" + escapeJson(title) + "\",\n" +
+                "  \"title\": " + JsonHelper.toJsonString(title) + ",\n" +
                 "  \"status\": \"" + status.name() + "\"\n" +
                 "}";
         Files.writeString(metadataPath, json);
-    }
-
-    private static String extractStringField(String json, String fieldName) {
-        String pattern = "\"" + fieldName + "\"";
-        int fieldStart = json.indexOf(pattern);
-        if (fieldStart == -1) return null;
-
-        int colonPos = json.indexOf(':', fieldStart);
-        if (colonPos == -1) return null;
-
-        int valueStart = json.indexOf('"', colonPos);
-        if (valueStart == -1) return null;
-
-        int valueEnd = findClosingQuote(json, valueStart + 1);
-        if (valueEnd == -1) return null;
-
-        return unescapeJson(json.substring(valueStart + 1, valueEnd));
-    }
-
-    private static int findClosingQuote(String json, int start) {
-        for (int i = start; i < json.length(); i++) {
-            if (json.charAt(i) == '"' && json.charAt(i - 1) != '\\') {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static String unescapeJson(String s) {
-        return s.replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t");
-    }
-
-    private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 
     @Override

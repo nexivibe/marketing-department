@@ -18,6 +18,7 @@ public class StartupController {
     @FXML private ListView<String> recentProjectsList;
     @FXML private Button openProjectButton;
     @FXML private Button createProjectButton;
+    @FXML private Button settingsButton;
 
     private MarketingApp app;
     private AppSettings settings;
@@ -125,6 +126,15 @@ public class StartupController {
             app.showProjectView(project);
         } catch (IOException e) {
             showError("Failed to Open Project", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onSettingsClick() {
+        try {
+            app.showSettingsDialog();
+        } catch (IOException e) {
+            showError("Failed to Open Settings", e.getMessage());
         }
     }
 
