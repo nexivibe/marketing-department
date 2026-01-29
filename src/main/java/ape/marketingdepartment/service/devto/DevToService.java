@@ -16,14 +16,19 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Service for publishing articles to Dev.to using their API.
+ * Service for publishing articles to Dev.to using their Forem API v1.
  *
- * API Documentation: https://developers.forem.com/api
+ * API Documentation: https://developers.forem.com/api/v1
+ *
+ * Authentication: Requires api-key header with key from dev.to/settings/extensions
+ * Accept Header: application/vnd.forem.api-v1+json (required for v1 API)
  */
 public class DevToService {
 
     private static final String SERVICE_NAME = "Dev.to";
     private static final String BASE_URL = "https://dev.to/api";
+    private static final String API_VERSION_HEADER = "application/vnd.forem.api-v1+json";
+    private static final String USER_AGENT = "MarketingDepartment/1.0 (https://github.com/nexivibe)";
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
 
     private final HttpClient httpClient;
@@ -128,8 +133,9 @@ public class DevToService {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("api-key", apiKey)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/vnd.forem.api-v1+json")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", API_VERSION_HEADER)
+                .header("User-Agent", USER_AGENT)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .timeout(TIMEOUT)
                 .build();
@@ -148,12 +154,27 @@ public class DevToService {
                             (result.articleUrl() != null ? ": " + result.articleUrl() : ""));
                         return result;
                     } else if (response.statusCode() == 401) {
-                        String msg = "Authentication failed - check your API key";
+                        String msg = "Authentication failed - check your API key is correct";
+                        logError(msg, null);
+                        return new PublishResult(false, msg, null, null);
+                    } else if (response.statusCode() == 403) {
+                        // 403 Forbidden - API key valid but account doesn't have access
+                        String errorMsg = extractErrorMessage(response.body());
+                        String msg = "Access forbidden (403): " + errorMsg +
+                            "\n\nDev.to API access requires:\n" +
+                            "1. Email verified on your Dev.to account\n" +
+                            "2. Account in good standing (not suspended)\n" +
+                            "3. API key from: dev.to/settings/extensions\n" +
+                            "4. Some accounts need to publish manually first";
                         logError(msg, null);
                         return new PublishResult(false, msg, null, null);
                     } else if (response.statusCode() == 422) {
                         String errorMsg = extractErrorMessage(response.body());
                         String msg = "Validation error: " + errorMsg;
+                        logError(msg, null);
+                        return new PublishResult(false, msg, null, null);
+                    } else if (response.statusCode() == 429) {
+                        String msg = "Rate limited - too many requests. Wait a few minutes and try again.";
                         logError(msg, null);
                         return new PublishResult(false, msg, null, null);
                     } else {
@@ -171,7 +192,7 @@ public class DevToService {
     }
 
     /**
-     * Publish a Post directly to Dev.to.
+     * Publish a Post directly to Dev.to using original content.
      */
     public CompletableFuture<PublishResult> publishPost(
             Post post,
@@ -179,9 +200,32 @@ public class DevToService {
             boolean published,
             Consumer<String> statusListener
     ) {
+        return publishPost(post, null, canonicalUrl, published, statusListener);
+    }
+
+    /**
+     * Publish a Post to Dev.to with optional transformed content.
+     *
+     * @param post The post metadata (title, tags, description)
+     * @param transformedContent If provided, use this instead of post.getMarkdownContent()
+     * @param canonicalUrl Optional canonical URL
+     * @param published Whether to publish immediately
+     * @param statusListener Status callback
+     */
+    public CompletableFuture<PublishResult> publishPost(
+            Post post,
+            String transformedContent,
+            String canonicalUrl,
+            boolean published,
+            Consumer<String> statusListener
+    ) {
         try {
             log("Publishing post to Dev.to: " + post.getTitle());
-            String bodyMarkdown = post.getMarkdownContent();
+            // Use transformed content if provided, otherwise use original
+            String bodyMarkdown = (transformedContent != null && !transformedContent.isBlank())
+                    ? transformedContent
+                    : post.getMarkdownContent();
+            log("Using " + (transformedContent != null ? "transformed" : "original") + " content");
             return publish(
                     post.getTitle(),
                     bodyMarkdown,
@@ -199,6 +243,17 @@ public class DevToService {
 
     /**
      * Build the JSON request body for creating an article.
+     *
+     * Forem API v1 article fields:
+     * - title (required): Article title
+     * - body_markdown (required): Article content in markdown
+     * - published: Whether to publish immediately (true) or save as draft (false)
+     * - tags: Array of tag strings (max 4, lowercase, no spaces, max 30 chars each)
+     * - canonical_url: Original URL if cross-posting
+     * - description: Meta description for SEO (max 150 chars)
+     * - series: Name of the series to add this article to
+     * - main_image: URL of the main image/cover
+     * - organization_id: ID of the organization to publish under
      */
     private String buildArticleRequestBody(
             String title,
@@ -215,27 +270,37 @@ public class DevToService {
         sb.append("    \"body_markdown\": ").append(JsonHelper.toJsonString(bodyMarkdown)).append(",\n");
         sb.append("    \"published\": ").append(published);
 
-        // Add tags (max 4)
+        // Add tags (max 4, each tag max 30 chars, lowercase, alphanumeric only)
         if (tags != null && !tags.isEmpty()) {
             List<String> limitedTags = tags.size() > 4 ? tags.subList(0, 4) : tags;
             sb.append(",\n    \"tags\": [");
             for (int i = 0; i < limitedTags.size(); i++) {
                 if (i > 0) sb.append(", ");
-                // Dev.to tags should be lowercase, no spaces
-                String tag = limitedTags.get(i).toLowerCase().replaceAll("\\s+", "");
-                sb.append(JsonHelper.toJsonString(tag));
+                // Dev.to tags: lowercase, no spaces, alphanumeric and hyphens only, max 30 chars
+                String tag = limitedTags.get(i)
+                        .toLowerCase()
+                        .replaceAll("[^a-z0-9-]", "")  // Remove non-alphanumeric except hyphens
+                        .replaceAll("-+", "-")          // Collapse multiple hyphens
+                        .replaceAll("^-|-$", "");       // Trim leading/trailing hyphens
+                if (tag.length() > 30) {
+                    tag = tag.substring(0, 30);
+                }
+                if (!tag.isEmpty()) {
+                    sb.append(JsonHelper.toJsonString(tag));
+                }
             }
             sb.append("]");
         }
 
-        // Add canonical URL if provided
+        // Add canonical URL if provided (for cross-posting/SEO)
         if (canonicalUrl != null && !canonicalUrl.isBlank()) {
             sb.append(",\n    \"canonical_url\": ").append(JsonHelper.toJsonString(canonicalUrl));
         }
 
-        // Add description if provided
+        // Add description if provided (max 150 chars for SEO)
         if (description != null && !description.isBlank()) {
-            sb.append(",\n    \"description\": ").append(JsonHelper.toJsonString(description));
+            String desc = description.length() > 150 ? description.substring(0, 150) : description;
+            sb.append(",\n    \"description\": ").append(JsonHelper.toJsonString(desc));
         }
 
         sb.append("\n  }\n");
@@ -289,6 +354,53 @@ public class DevToService {
      * Result of a publish operation.
      */
     public record PublishResult(boolean success, String message, String articleUrl, String articleId) {}
+
+    /**
+     * Validate the API key by calling the /users/me endpoint.
+     * This is useful for testing API key validity before attempting to publish.
+     *
+     * @return CompletableFuture with validation result (username if valid, error message if not)
+     */
+    public CompletableFuture<ValidationResult> validateApiKey() {
+        String apiKey = getApiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            return CompletableFuture.completedFuture(
+                    new ValidationResult(false, "API key not configured", null));
+        }
+
+        String url = BASE_URL + "/users/me";
+        log("Validating API key...");
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("api-key", apiKey)
+                .header("Accept", API_VERSION_HEADER)
+                .header("User-Agent", USER_AGENT)
+                .GET()
+                .timeout(TIMEOUT)
+                .build();
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        String username = JsonHelper.extractStringField(response.body(), "username");
+                        log("API key valid for user: " + username);
+                        return new ValidationResult(true, "Valid", username);
+                    } else if (response.statusCode() == 401) {
+                        return new ValidationResult(false, "Invalid API key", null);
+                    } else if (response.statusCode() == 403) {
+                        return new ValidationResult(false, "API access forbidden - account may be restricted", null);
+                    } else {
+                        return new ValidationResult(false, "Unexpected response: " + response.statusCode(), null);
+                    }
+                })
+                .exceptionally(ex -> new ValidationResult(false, "Connection failed: " + ex.getMessage(), null));
+    }
+
+    /**
+     * Result of API key validation.
+     */
+    public record ValidationResult(boolean valid, String message, String username) {}
 
     /**
      * Get the default prompt for transforming content for Dev.to.

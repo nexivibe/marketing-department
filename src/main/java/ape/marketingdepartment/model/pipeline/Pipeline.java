@@ -101,17 +101,17 @@ public class Pipeline {
      * Get gatekeeper stages (WEB_EXPORT, URL_VERIFY).
      */
     public List<PipelineStage> getGatekeeperStages() {
-        return getEnabledStages().stream()
+        return getSortedStages().stream()
                 .filter(s -> s.getType() != null && s.getType().isGatekeeper())
                 .toList();
     }
 
     /**
-     * Get social stages (LINKEDIN, TWITTER).
+     * Get publishing stages (all non-gatekeeper stages: GETLATE, DEV_TO, etc.).
      */
     public List<PipelineStage> getSocialStages() {
-        return getEnabledStages().stream()
-                .filter(s -> s.getType() != null && s.getType().isSocialStage())
+        return getSortedStages().stream()
+                .filter(s -> s.getType() != null && !s.getType().isGatekeeper())
                 .toList();
     }
 

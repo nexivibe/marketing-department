@@ -79,15 +79,16 @@ public class PlatformTransform {
         try {
             String content = Files.readString(transformsFile);
 
-            // Parse each platform's transform
-            String linkedinJson = JsonHelper.extractObjectField(content, "linkedin");
-            if (linkedinJson != null) {
-                transforms.put("linkedin", PlatformTransform.fromJson(linkedinJson));
-            }
+            // Parse each platform's transform dynamically
+            List<String> platforms = List.of("linkedin", "twitter", "bluesky", "threads",
+                    "facebook", "instagram", "reddit", "tiktok", "youtube", "pinterest",
+                    "telegram", "snapchat", "googlebusiness", "devto");
 
-            String twitterJson = JsonHelper.extractObjectField(content, "twitter");
-            if (twitterJson != null) {
-                transforms.put("twitter", PlatformTransform.fromJson(twitterJson));
+            for (String platform : platforms) {
+                String platformJson = JsonHelper.extractObjectField(content, platform);
+                if (platformJson != null) {
+                    transforms.put(platform, PlatformTransform.fromJson(platformJson));
+                }
             }
 
         } catch (IOException e) {
@@ -99,9 +100,21 @@ public class PlatformTransform {
 
     /**
      * Save all transforms for a post to the transforms file.
+     * Preserves the "web" section if it exists.
      */
     public static void saveAll(Path postsDir, String postName, Map<String, PlatformTransform> transforms) throws IOException {
         Path transformsFile = postsDir.resolve(postName + "-transforms.json");
+
+        // Load existing web transform to preserve it
+        String existingWebJson = null;
+        if (Files.exists(transformsFile)) {
+            try {
+                String existingContent = Files.readString(transformsFile);
+                existingWebJson = JsonHelper.extractObjectField(existingContent, "web");
+            } catch (IOException e) {
+                // Ignore, will create fresh file
+            }
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
@@ -111,6 +124,12 @@ public class PlatformTransform {
             if (i > 0) sb.append(",\n");
             sb.append("  \"").append(entry.getKey()).append("\": ").append(entry.getValue().toJson());
             i++;
+        }
+
+        // Preserve web transform if it existed
+        if (existingWebJson != null) {
+            if (i > 0) sb.append(",\n");
+            sb.append("  \"web\": ").append(existingWebJson);
         }
 
         sb.append("\n}");

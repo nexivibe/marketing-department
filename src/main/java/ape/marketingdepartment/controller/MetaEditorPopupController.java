@@ -3,6 +3,7 @@ package ape.marketingdepartment.controller;
 import ape.marketingdepartment.model.AppSettings;
 import ape.marketingdepartment.model.Post;
 import ape.marketingdepartment.model.Project;
+import ape.marketingdepartment.model.WebTransform;
 import ape.marketingdepartment.service.ai.AiReviewService;
 import ape.marketingdepartment.service.ai.AiServiceFactory;
 import ape.marketingdepartment.service.ai.AiStatus;
@@ -23,6 +24,9 @@ import java.util.List;
 public class MetaEditorPopupController {
 
     @FXML private Label titleLabel;
+    @FXML private TextField slugField;
+    @FXML private Label slugPreviewLabel;
+    @FXML private Button suggestSlugButton;
     @FXML private TextArea descriptionArea;
     @FXML private Label descriptionCharCount;
     @FXML private Button suggestDescButton;
@@ -37,6 +41,7 @@ public class MetaEditorPopupController {
     private Post post;
     private AiServiceFactory aiServiceFactory;
     private ObservableList<String> tags;
+    private WebTransform webTransform;
     private boolean saved = false;
 
     public void initialize(Stage dialogStage, AppSettings appSettings, Project project, Post post) {
@@ -53,6 +58,19 @@ public class MetaEditorPopupController {
         titleLabel.setText("Edit Metadata - " + post.getTitle());
         dialogStage.setTitle("Edit Metadata - " + post.getTitle());
 
+        // Load existing web transform (slug)
+        webTransform = WebTransform.load(project.getPostsDirectory(), post.getName());
+        if (webTransform == null) {
+            webTransform = new WebTransform();
+            // Generate default slug from title
+            webTransform.setUri(WebTransform.generateSlug(post.getTitle()));
+        }
+        slugField.setText(webTransform.getUri() != null ? webTransform.getUri() : "");
+        updateSlugPreview();
+
+        // Update preview as user types
+        slugField.textProperty().addListener((obs, oldVal, newVal) -> updateSlugPreview());
+
         // Load existing description
         String desc = post.getDescription();
         descriptionArea.setText(desc != null ? desc : "");
@@ -66,6 +84,25 @@ public class MetaEditorPopupController {
         tagsListView.setItems(tags);
 
         updateStatus();
+    }
+
+    private void updateSlugPreview() {
+        String slug = slugField.getText();
+        if (slug == null || slug.isEmpty()) {
+            slugPreviewLabel.setText("(will use default)");
+        } else {
+            String urlBase = project.getSettings().getUrlBase();
+            if (urlBase != null && !urlBase.isEmpty()) {
+                String base = urlBase.endsWith("/") ? urlBase : urlBase + "/";
+                String path = slug.startsWith("/") ? slug.substring(1) : slug;
+                if (!path.endsWith(".html")) {
+                    path = path + ".html";
+                }
+                slugPreviewLabel.setText(base + path);
+            } else {
+                slugPreviewLabel.setText(slug.endsWith(".html") ? slug : slug + ".html");
+            }
+        }
     }
 
     private void updateDescriptionCharCount() {
@@ -150,6 +187,76 @@ public class MetaEditorPopupController {
         }
 
         return desc;
+    }
+
+    @FXML
+    private void onSuggestSlug() {
+        String agentName = project.getSettings().getSelectedAgent();
+        AiReviewService service = aiServiceFactory.getService(agentName);
+
+        if (service == null || !service.isConfigured()) {
+            ErrorDialog.showDetailed("AI Service Not Configured",
+                    "Please add your " + agentName + " API key in Settings.",
+                    "Go to App Settings and add your API key for " + agentName + " to use AI features.");
+            return;
+        }
+
+        service.setProjectDir(project.getPath());
+        service.setStatusListener(status -> Platform.runLater(() -> updateStatusFromAi(status)));
+
+        setLoading(true);
+        statusLabel.setText("Generating URL slug...");
+
+        try {
+            String content = post.getMarkdownContent();
+            String systemPrompt = project.getSettings().getUriSuggestionPrompt();
+
+            service.transformContent(systemPrompt, content)
+                    .thenAccept(response -> {
+                        Platform.runLater(() -> {
+                            String slug = parseSlugSuggestion(response);
+                            slugField.setText(slug);
+                            statusLabel.setText("Slug generated");
+                            statusLabel.setStyle("-fx-text-fill: #228b22;");
+                            setLoading(false);
+                        });
+                    })
+                    .exceptionally(ex -> {
+                        Platform.runLater(() -> {
+                            ErrorDialog.showAiError(ex);
+                            statusLabel.setText("Failed to generate slug");
+                            statusLabel.setStyle("-fx-text-fill: #dc143c;");
+                            setLoading(false);
+                        });
+                        return null;
+                    });
+
+        } catch (IOException e) {
+            ErrorDialog.showDetailed("Failed to Load Post Content",
+                    "Could not load the post content.",
+                    e.getMessage());
+            setLoading(false);
+        }
+    }
+
+    private String parseSlugSuggestion(String response) {
+        // Clean up the response - extract just the slug
+        String slug = response.trim()
+                .replaceAll("^[\"'`]+|[\"'`]+$", "")  // Remove quotes
+                .split("\n")[0]                        // Take first line
+                .trim()
+                .toLowerCase()
+                .replaceAll("[^a-z0-9\\s-]", "")       // Remove special chars
+                .replaceAll("\\s+", "-")               // Replace spaces with hyphens
+                .replaceAll("-+", "-")                 // Collapse multiple hyphens
+                .replaceAll("^-|-$", "");              // Trim leading/trailing hyphens
+
+        // Ensure it ends with .html
+        if (!slug.endsWith(".html")) {
+            slug = slug + ".html";
+        }
+
+        return slug;
     }
 
     @FXML
@@ -261,8 +368,10 @@ public class MetaEditorPopupController {
     }
 
     private void setLoading(boolean loading) {
+        suggestSlugButton.setDisable(loading);
         suggestDescButton.setDisable(loading);
         suggestTagsButton.setDisable(loading);
+        slugField.setDisable(loading);
         newTagField.setDisable(loading);
     }
 
@@ -300,8 +409,16 @@ public class MetaEditorPopupController {
         post.setDescription(descriptionArea.getText().trim());
         post.setTags(new ArrayList<>(tags));
 
+        // Update the web transform with the slug
+        String slug = slugField.getText().trim();
+        if (!slug.isEmpty()) {
+            webTransform.setUri(slug);
+            webTransform.normalizeUri();
+        }
+
         try {
             post.save();
+            webTransform.save(project.getPostsDirectory(), post.getName());
             saved = true;
             dialogStage.close();
         } catch (IOException e) {

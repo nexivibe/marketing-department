@@ -171,12 +171,14 @@ public class PipelineStage {
 
     /**
      * Get the effective prompt for this stage, falling back to platform default if not set.
+     * Works for all stages that require transforms (GETLATE, DEV_TO).
      */
     public String getEffectivePrompt() {
         if (prompt != null && !prompt.isBlank()) {
             return prompt;
         }
-        if (type != null && type.isSocialStage()) {
+        // Return default prompt for any stage that requires transform
+        if (type != null && type.requiresTransform()) {
             return getDefaultPromptForPlatform(platformHint);
         }
         return "";

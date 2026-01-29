@@ -17,31 +17,35 @@
 
     <Separator/>
 
-    <!-- Gatekeeper Stages Section -->
-    <VBox spacing="8">
-        <Label text="Gatekeeper Stages" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
-        <VBox fx:id="gatekeeperStagesBox" spacing="6">
+    <!-- Gatekeeper Stages Section (Collapsible) -->
+    <TitledPane fx:id="gatekeeperPane" animated="false">
+        <graphic>
+            <Label fx:id="gatekeeperTitleLabel" text="Gatekeeper Stages" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+        </graphic>
+        <VBox fx:id="gatekeeperStagesBox" spacing="6" style="-fx-padding: 8;">
             <!-- Dynamic stage cards will be added here -->
         </VBox>
-    </VBox>
+    </TitledPane>
 
-    <Separator/>
-
-    <!-- Social Publishing Section -->
-    <VBox spacing="8" VBox.vgrow="ALWAYS">
-        <HBox alignment="CENTER_LEFT" spacing="10">
-            <Label text="Social Publishing" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
-            <Label fx:id="socialLockLabel" text="(locked until gatekeepers complete)" style="-fx-text-fill: #888; -fx-font-style: italic;"/>
-        </HBox>
-        <VBox fx:id="socialStagesBox" spacing="6" VBox.vgrow="ALWAYS">
-            <!-- Dynamic social stage cards will be added here -->
-        </VBox>
-    </VBox>
+    <!-- Social Publishing Section (Collapsible) -->
+    <TitledPane fx:id="socialPane" animated="false" VBox.vgrow="ALWAYS">
+        <graphic>
+            <HBox alignment="CENTER_LEFT" spacing="10">
+                <Label fx:id="socialTitleLabel" text="Social Publishing" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+                <Label fx:id="socialProgressLabel" text="" style="-fx-font-size: 12px;"/>
+            </HBox>
+        </graphic>
+        <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS" style="-fx-background-color: transparent; -fx-background: transparent;">
+            <VBox fx:id="socialStagesBox" spacing="6" style="-fx-padding: 8;">
+                <!-- Dynamic social stage cards will be added here -->
+            </VBox>
+        </ScrollPane>
+    </TitledPane>
 
     <Separator/>
 
     <!-- Transform Preview -->
-    <VBox spacing="5" VBox.vgrow="SOMETIMES" prefHeight="200">
+    <VBox spacing="5" VBox.vgrow="SOMETIMES" prefHeight="240">
         <HBox alignment="CENTER_LEFT" spacing="10">
             <Label text="Transform Preview:" style="-fx-font-weight: bold;"/>
             <ComboBox fx:id="previewStageCombo" promptText="Select stage to preview" prefWidth="250"/>

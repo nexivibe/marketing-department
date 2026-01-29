@@ -13,6 +13,7 @@ import ape.marketingdepartment.service.devto.DevToService;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -262,6 +263,7 @@ public class PipelineExecutionService {
 
     /**
      * Execute a Dev.to article publishing stage.
+     * Uses the transformed content if available, otherwise generates it first.
      */
     public CompletableFuture<PipelineExecution.StageResult> executeDevToPublish(
             Project project,
@@ -292,9 +294,46 @@ public class PipelineExecutionService {
             log("Using canonical URL: " + canonicalUrl);
         }
 
-        statusListener.accept("Publishing article to Dev.to...");
+        // Try to load existing transform from disk
+        String platform = stage.getPlatformHint() != null ? stage.getPlatformHint() : "devto";
+        Map<String, PlatformTransform> transforms =
+                PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
+        PlatformTransform existingTransform = transforms.get(platform);
 
-        return devToService.publishPost(post, canonicalUrl, published, statusListener)
+        if (existingTransform != null && existingTransform.getText() != null && !existingTransform.getText().isBlank()) {
+            // Use existing transform
+            log("Using existing transform for Dev.to");
+            statusListener.accept("Publishing transformed article to Dev.to...");
+            return publishToDevTo(post, existingTransform.getText(), canonicalUrl, published, statusListener);
+        }
+
+        // No existing transform - need to generate one first
+        log("No existing transform found, generating new content for Dev.to...");
+        statusListener.accept("Generating Dev.to content...");
+
+        final String finalCanonicalUrl = canonicalUrl;
+        return generateTransformWithUrl(project, post, stage, execution.getVerifiedUrl(), statusListener)
+                .thenCompose(transformedContent -> {
+                    // Save the transform to disk
+                    saveTransformToDisk(project, post, platform, transformedContent);
+                    statusListener.accept("Publishing transformed article to Dev.to...");
+                    return publishToDevTo(post, transformedContent, finalCanonicalUrl, published, statusListener);
+                })
+                .exceptionally(ex -> PipelineExecution.StageResult.failed(
+                        "Dev.to publishing error: " + ex.getMessage()));
+    }
+
+    /**
+     * Internal method to publish to Dev.to with transformed content.
+     */
+    private CompletableFuture<PipelineExecution.StageResult> publishToDevTo(
+            Post post,
+            String transformedContent,
+            String canonicalUrl,
+            boolean published,
+            Consumer<String> statusListener
+    ) {
+        return devToService.publishPost(post, transformedContent, canonicalUrl, published, statusListener)
                 .thenApply(result -> {
                     if (result.success()) {
                         PipelineExecution.StageResult stageResult =
@@ -304,9 +343,23 @@ public class PipelineExecutionService {
                     } else {
                         return PipelineExecution.StageResult.failed(result.message());
                     }
-                })
-                .exceptionally(ex -> PipelineExecution.StageResult.failed(
-                        "Dev.to publishing error: " + ex.getMessage()));
+                });
+    }
+
+    /**
+     * Save a transform to disk for persistence.
+     */
+    private void saveTransformToDisk(Project project, Post post, String platform, String transformedContent) {
+        try {
+            Map<String, PlatformTransform> transforms =
+                    PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
+            PlatformTransform transform = new PlatformTransform(transformedContent, System.currentTimeMillis(), false);
+            transforms.put(platform, transform);
+            PlatformTransform.saveAll(project.getPostsDirectory(), post.getName(), transforms);
+            log("Saved Dev.to transform to disk");
+        } catch (IOException e) {
+            log("Warning: Failed to save transform to disk: " + e.getMessage());
+        }
     }
 
     /**

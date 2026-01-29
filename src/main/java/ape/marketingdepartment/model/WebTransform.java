@@ -169,19 +169,21 @@ public class WebTransform {
     public void save(Path postsDir, String postName) throws IOException {
         Path transformsFile = postsDir.resolve(postName + "-transforms.json");
 
-        // Load existing transforms
+        // Load existing transforms - preserve all platforms
         Map<String, String> platformTransforms = new HashMap<>();
         if (Files.exists(transformsFile)) {
             String content = Files.readString(transformsFile);
 
-            // Extract existing platform transforms
-            String linkedinJson = JsonHelper.extractObjectField(content, "linkedin");
-            if (linkedinJson != null) {
-                platformTransforms.put("linkedin", linkedinJson);
-            }
-            String twitterJson = JsonHelper.extractObjectField(content, "twitter");
-            if (twitterJson != null) {
-                platformTransforms.put("twitter", twitterJson);
+            // Extract all existing platform transforms
+            java.util.List<String> platforms = java.util.List.of("linkedin", "twitter", "bluesky", "threads",
+                    "facebook", "instagram", "reddit", "tiktok", "youtube", "pinterest",
+                    "telegram", "snapchat", "googlebusiness", "devto");
+
+            for (String platform : platforms) {
+                String platformJson = JsonHelper.extractObjectField(content, platform);
+                if (platformJson != null) {
+                    platformTransforms.put(platform, platformJson);
+                }
             }
         }
 

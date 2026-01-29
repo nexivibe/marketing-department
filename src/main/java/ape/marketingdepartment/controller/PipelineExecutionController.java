@@ -28,9 +28,13 @@ import java.util.Map;
 public class PipelineExecutionController {
 
     @FXML private Label titleLabel;
+    @FXML private TitledPane gatekeeperPane;
+    @FXML private Label gatekeeperTitleLabel;
     @FXML private VBox gatekeeperStagesBox;
+    @FXML private TitledPane socialPane;
+    @FXML private Label socialTitleLabel;
+    @FXML private Label socialProgressLabel;
     @FXML private VBox socialStagesBox;
-    @FXML private Label socialLockLabel;
     @FXML private ComboBox<PipelineStage> previewStageCombo;
     @FXML private TextArea transformPreviewArea;
     @FXML private Label statusLabel;
@@ -102,9 +106,14 @@ public class PipelineExecutionController {
             @Override
             public String toString(PipelineStage stage) {
                 if (stage == null) return "";
-                PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
-                String profileName = profile != null ? profile.getName() : stage.getProfileId();
-                return stage.getType().getDisplayName() + " - " + profileName;
+                // Only show profile info if there's a profile
+                if (stage.getProfileId() != null) {
+                    PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
+                    if (profile != null) {
+                        return stage.getType().getDisplayName() + " - " + profile.getName();
+                    }
+                }
+                return stage.getType().getDisplayName();
             }
 
             @Override
@@ -146,7 +155,7 @@ public class PipelineExecutionController {
         // Status indicator
         Label statusIcon = new Label();
         statusIcon.setMinWidth(20);
-        statusIcon.setStyle("-fx-font-family: monospace; -fx-font-weight: bold;");
+        statusIcon.setStyle("-fx-font-family: monospace; -fx-font-weight: bold; -fx-text-fill: #333;");
         statusIcon.setId("status-icon");
 
         // Main content area (stage name + details)
@@ -155,7 +164,8 @@ public class PipelineExecutionController {
 
         // Stage name
         Label nameLabel = new Label(getStageName(stage));
-        nameLabel.setStyle("-fx-font-weight: bold;");
+        nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #333;");
+        nameLabel.setId("name-label");
 
         // Details label (URL, path, etc.)
         Label detailsLabel = new Label();
@@ -168,16 +178,23 @@ public class PipelineExecutionController {
 
         // Status text
         Label statusText = new Label();
-        statusText.setStyle("-fx-text-fill: #666;");
+        statusText.setStyle("-fx-text-fill: #555;");
         statusText.setId("status-text");
         statusText.setMinWidth(100);
+
+        // Generate button (for stages requiring transforms)
+        Button generateButton = new Button("Generate");
+        generateButton.setId("generate-button");
+        generateButton.setVisible(false);
+        generateButton.setManaged(false);
+        generateButton.setOnAction(e -> generateTransformForStage(stage));
 
         // Action button
         Button actionButton = new Button();
         actionButton.setId("action-button");
         actionButton.setOnAction(e -> executeStage(stage));
 
-        card.getChildren().addAll(statusIcon, contentBox, statusText, actionButton);
+        card.getChildren().addAll(statusIcon, contentBox, statusText, generateButton, actionButton);
 
         return card;
     }
@@ -277,14 +294,112 @@ public class PipelineExecutionController {
 
     private void updateStageStatuses() {
         boolean gatekeepersComplete = executionService.areGatekeepersComplete(pipeline, execution, project, post);
-        socialLockLabel.setVisible(!gatekeepersComplete);
 
-        for (PipelineStage stage : pipeline.getEnabledStages()) {
+        // Update gatekeeper section
+        updateGatekeeperSection(gatekeepersComplete);
+
+        // Update social section
+        updateSocialSection(gatekeepersComplete);
+
+        // Update individual stage cards
+        for (PipelineStage stage : pipeline.getSortedStages()) {
             HBox card = stageCards.get(stage.getId());
             if (card == null) continue;
 
             PipelineStageStatus status = getEffectiveStageStatus(stage);
             updateCardForStatus(card, stage, status);
+        }
+    }
+
+    private void updateGatekeeperSection(boolean gatekeepersComplete) {
+        if (gatekeepersComplete) {
+            gatekeeperTitleLabel.setText("Gatekeeper Stages - COMPLETE");
+            gatekeeperTitleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #27ae60;");
+            gatekeeperPane.setExpanded(false);
+        } else {
+            // Check individual gatekeeper statuses
+            int completed = 0;
+            int total = pipeline.getGatekeeperStages().size();
+            for (PipelineStage stage : pipeline.getGatekeeperStages()) {
+                PipelineStageStatus status = getEffectiveStageStatus(stage);
+                if (status == PipelineStageStatus.COMPLETED) {
+                    completed++;
+                }
+            }
+            String statusText = completed + "/" + total + " complete";
+            gatekeeperTitleLabel.setText("Gatekeeper Stages - " + statusText);
+            gatekeeperTitleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #e74c3c;");
+            gatekeeperPane.setExpanded(true);
+        }
+    }
+
+    private void updateSocialSection(boolean gatekeepersComplete) {
+        if (!gatekeepersComplete) {
+            socialTitleLabel.setText("Social Publishing");
+            socialTitleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #999;");
+            socialProgressLabel.setText("(waiting for gatekeepers)");
+            socialProgressLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #999; -fx-font-style: italic;");
+            socialPane.setExpanded(false);
+            socialPane.setDisable(true);
+        } else {
+            socialPane.setDisable(false);
+            socialPane.setExpanded(true);
+
+            // Calculate progress
+            int success = 0;
+            int failed = 0;
+            int remaining = 0;
+            int inProgress = 0;
+
+            for (PipelineStage stage : pipeline.getSocialStages()) {
+                PipelineStageStatus status = getEffectiveStageStatus(stage);
+                switch (status) {
+                    case COMPLETED -> success++;
+                    case FAILED -> failed++;
+                    case IN_PROGRESS -> inProgress++;
+                    default -> remaining++;
+                }
+            }
+
+            int total = pipeline.getSocialStages().size();
+            socialTitleLabel.setText("Social Publishing");
+            socialTitleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #333;");
+
+            // Build progress text
+            StringBuilder progress = new StringBuilder();
+            if (total == 0) {
+                progress.append("(no stages configured)");
+                socialProgressLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #999;");
+            } else if (success == total) {
+                progress.append("ALL COMPLETE");
+                socialProgressLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #27ae60; -fx-font-weight: bold;");
+            } else {
+                if (success > 0) {
+                    progress.append(success).append(" done");
+                }
+                if (failed > 0) {
+                    if (progress.length() > 0) progress.append(", ");
+                    progress.append(failed).append(" failed");
+                }
+                if (inProgress > 0) {
+                    if (progress.length() > 0) progress.append(", ");
+                    progress.append(inProgress).append(" running");
+                }
+                if (remaining > 0) {
+                    if (progress.length() > 0) progress.append(", ");
+                    progress.append(remaining).append(" remaining");
+                }
+
+                // Color based on status
+                if (failed > 0) {
+                    socialProgressLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #e74c3c;");
+                } else if (inProgress > 0) {
+                    socialProgressLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #f39c12;");
+                } else {
+                    socialProgressLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #666;");
+                }
+            }
+            socialProgressLabel.setText("(" + progress + ")");
         }
     }
 
@@ -309,7 +424,9 @@ public class PipelineExecutionController {
         Label statusIcon = (Label) card.lookup("#status-icon");
         Label statusText = (Label) card.lookup("#status-text");
         Label detailsLabel = (Label) card.lookup("#details-label");
+        Label nameLabel = (Label) card.lookup("#name-label");
         Button actionButton = (Button) card.lookup("#action-button");
+        Button generateButton = (Button) card.lookup("#generate-button");
 
         PipelineExecution.StageResult result = execution.getStageResult(stage.getId());
 
@@ -329,24 +446,46 @@ public class PipelineExecutionController {
             }
         }
 
+        // Check if this stage requires transform and if one exists
+        boolean needsTransform = stage.getType().requiresTransform();
+        boolean hasTransform = false;
+        if (needsTransform && generateButton != null) {
+            hasTransform = checkTransformExists(stage);
+            boolean showGenerate = !hasTransform && status != PipelineStageStatus.LOCKED;
+            generateButton.setVisible(showGenerate);
+            generateButton.setManaged(showGenerate);
+            if (showGenerate) {
+                generateButton.setText("Generation Required");
+                generateButton.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold;");
+            }
+        }
+
         // Special handling for web export with missing file
         boolean webExportFileMissing = stage.getType() == PipelineStageType.WEB_EXPORT
                 && status == PipelineStageStatus.WARNING
                 && result != null && result.getStatus() == PipelineStageStatus.COMPLETED;
+
+        // Ensure name label has correct text color
+        if (nameLabel != null) {
+            nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #333;");
+        }
 
         switch (status) {
             case LOCKED -> {
                 statusIcon.setText("[#]");
                 statusIcon.setStyle("-fx-font-family: monospace; -fx-text-fill: #999;");
                 statusText.setText("Locked");
+                statusText.setStyle("-fx-text-fill: #999;");
                 actionButton.setText("Locked");
                 actionButton.setDisable(true);
+                actionButton.setStyle("-fx-background-color: #ccc; -fx-text-fill: #666;");
                 card.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #ccc; -fx-border-radius: 4; -fx-background-radius: 4;");
             }
             case PENDING -> {
                 statusIcon.setText("[ ]");
                 statusIcon.setStyle("-fx-font-family: monospace; -fx-text-fill: #333;");
-                statusText.setText("Ready");
+                statusText.setText(hasTransform ? "Ready" : (needsTransform ? "Needs content" : "Ready"));
+                statusText.setStyle("-fx-text-fill: #555;");
                 actionButton.setText(getActionText(stage));
                 actionButton.setDisable(false);
                 actionButton.setStyle("-fx-background-color: #3498db; -fx-text-fill: white;");
@@ -356,8 +495,10 @@ public class PipelineExecutionController {
                 statusIcon.setText("[>]");
                 statusIcon.setStyle("-fx-font-family: monospace; -fx-text-fill: #f39c12;");
                 statusText.setText("Running...");
+                statusText.setStyle("-fx-text-fill: #f39c12;");
                 actionButton.setText("Running...");
                 actionButton.setDisable(true);
+                actionButton.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white;");
                 card.setStyle("-fx-background-color: #fff9e6; -fx-border-color: #f39c12; -fx-border-radius: 4; -fx-background-radius: 4;");
             }
             case COMPLETED -> {
@@ -365,6 +506,7 @@ public class PipelineExecutionController {
                 statusIcon.setStyle("-fx-font-family: monospace; -fx-text-fill: #27ae60;");
                 String msg = result != null && result.getMessage() != null ? result.getMessage() : "Complete";
                 statusText.setText(truncate(msg, 40));
+                statusText.setStyle("-fx-text-fill: #27ae60;");
                 actionButton.setText("Re-run");
                 actionButton.setDisable(false);
                 actionButton.setStyle("-fx-background-color: #95a5a6; -fx-text-fill: white;");
@@ -375,6 +517,7 @@ public class PipelineExecutionController {
                 statusIcon.setStyle("-fx-font-family: monospace; -fx-text-fill: #e74c3c;");
                 String msg = result != null && result.getMessage() != null ? result.getMessage() : "Failed";
                 statusText.setText(truncate(msg, 40));
+                statusText.setStyle("-fx-text-fill: #e74c3c;");
                 actionButton.setText("Retry");
                 actionButton.setDisable(false);
                 actionButton.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
@@ -393,6 +536,7 @@ public class PipelineExecutionController {
                     buttonText = "Continue";
                 }
                 statusText.setText(truncate(msg, 40));
+                statusText.setStyle("-fx-text-fill: #f39c12;");
                 actionButton.setText(buttonText);
                 actionButton.setDisable(false);
                 actionButton.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white;");
@@ -408,6 +552,88 @@ public class PipelineExecutionController {
             case GETLATE -> "Publish Now";
             case DEV_TO -> "Publish to Dev.to";
         };
+    }
+
+    /**
+     * Check if a transform exists for the given stage.
+     * Only checks persisted transforms on disk, not in-memory cache,
+     * to ensure we show accurate status after pipeline edits.
+     */
+    private boolean checkTransformExists(PipelineStage stage) {
+        // Get platform from profile or hint
+        PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
+        String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
+        if (platform == null) {
+            return false;
+        }
+
+        // Check persisted transforms on disk
+        Map<String, PlatformTransform> transforms =
+                PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
+        PlatformTransform existing = transforms.get(platform);
+        return existing != null && existing.getText() != null && !existing.getText().isBlank();
+    }
+
+    /**
+     * Generate transform for a specific stage and update preview.
+     */
+    private void generateTransformForStage(PipelineStage stage) {
+        PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
+        String platformName = profile != null ?
+                ape.marketingdepartment.service.getlate.GetLateService.getPlatformDisplayName(profile.getPlatform()) :
+                "Content";
+        String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
+
+        startOperationTimer("Generating " + platformName + " Content");
+        updateStatus("Generating content for " + platformName + "...");
+
+        // Select this stage in the preview combo
+        previewStageCombo.setValue(stage);
+        transformPreviewArea.setText("Generating...");
+
+        executionService.generateTransformWithUrl(
+                project, post, stage, execution.getVerifiedUrl(),
+                status -> Platform.runLater(() -> updateStatus(status))
+        ).thenAccept(transform -> {
+            // Cache in memory
+            transformCache.put(stage.getCacheKey(), transform);
+
+            // Save to disk
+            saveTransformToDisk(platform, transform);
+
+            Platform.runLater(() -> {
+                stopOperationTimer("Content generated for " + platformName);
+                transformPreviewArea.setText(transform);
+                updateStatus("Content generated for " + platformName);
+                updateStageStatuses();
+            });
+        }).exceptionally(ex -> {
+            Platform.runLater(() -> {
+                stopOperationTimer("Generation failed");
+                transformPreviewArea.setText("Generation failed: " + ex.getMessage());
+                updateStatus("Generation failed: " + ex.getMessage());
+                ErrorDialog.showDetailed("Generation Failed",
+                        "Failed to generate content for " + platformName + ".",
+                        ex.getMessage());
+            });
+            return null;
+        });
+    }
+
+    /**
+     * Save a transform to disk.
+     */
+    private void saveTransformToDisk(String platform, String text) {
+        try {
+            Map<String, PlatformTransform> transforms =
+                    PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
+            PlatformTransform transform = new PlatformTransform(text, System.currentTimeMillis(), false);
+            transforms.put(platform, transform);
+            PlatformTransform.saveAll(project.getPostsDirectory(), post.getName(), transforms);
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Saved transform for " + platform);
+        } catch (IOException e) {
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] ERROR: Failed to save transform: " + e.getMessage());
+        }
     }
 
     private String truncate(String text, int maxLength) {
@@ -500,14 +726,18 @@ public class PipelineExecutionController {
             updateStatus("Generating transform for " + platformName + "...");
             appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Generating content transform for " + platformName + "...");
 
+            String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
+
             executionService.generateTransformWithUrl(
                     project, post, stage, execution.getVerifiedUrl(),
                     status -> Platform.runLater(() -> updateStatus(status))
             ).thenAccept(transform -> {
                 transformCache.put(stage.getCacheKey(), transform);
+                // Save to disk
+                saveTransformToDisk(platform, transform);
                 Platform.runLater(() -> {
                     transformPreviewArea.setText(transform);
-                    appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Transform generated, starting publish...");
+                    appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Transform generated and saved, starting publish...");
                     doPublish(stage, transform, platformName);
                 });
             }).exceptionally(ex -> {
@@ -617,9 +847,9 @@ public class PipelineExecutionController {
         // Load existing transform if available
         Map<String, PlatformTransform> transforms =
                 PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
-        // Get platform from profile
+        // Get platform from profile or stage hint (for Dev.to and other non-profile stages)
         PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
-        String platform = profile != null ? profile.getPlatform() : "unknown";
+        String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
         PlatformTransform existing = transforms.get(platform);
 
         if (existing != null && existing.getText() != null) {
@@ -642,6 +872,7 @@ public class PipelineExecutionController {
         String platformName = profile != null ?
                 ape.marketingdepartment.service.getlate.GetLateService.getPlatformDisplayName(profile.getPlatform()) :
                 "Social";
+        String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
 
         startOperationTimer("Generating " + platformName + " Transform");
         updateStatus("Regenerating transform...");
@@ -652,10 +883,13 @@ public class PipelineExecutionController {
                 status -> Platform.runLater(() -> updateStatus(status))
         ).thenAccept(transform -> {
             transformCache.put(stage.getCacheKey(), transform);
+            // Save to disk
+            saveTransformToDisk(platform, transform);
             Platform.runLater(() -> {
-                stopOperationTimer("Transform generated");
+                stopOperationTimer("Transform generated and saved");
                 transformPreviewArea.setText(transform);
-                updateStatus("Transform regenerated");
+                updateStatus("Transform regenerated and saved");
+                updateStageStatuses();
             });
         }).exceptionally(ex -> {
             Platform.runLater(() -> {
@@ -690,6 +924,9 @@ public class PipelineExecutionController {
 
             // Reload pipeline and rebuild UI
             loadPipeline();
+            // Clear transform cache since prompts may have changed
+            transformCache.clear();
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Pipeline reloaded - transform cache cleared");
             buildStageCards();
 
         } catch (IOException e) {

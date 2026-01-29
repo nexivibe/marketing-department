@@ -17,7 +17,9 @@
       "WebFetch(domain:getlate.dev)",
       "WebFetch(domain:docs.getlate.dev)",
       "WebSearch",
-      "WebFetch(domain:developers.forem.com)"
+      "WebFetch(domain:developers.forem.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(./mvnw compile:*)"
     ]
   }
 }

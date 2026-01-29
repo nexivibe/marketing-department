@@ -56,28 +56,15 @@
             <Button text="Move Up" onAction="#onMoveUp"/>
             <Button text="Move Down" onAction="#onMoveDown"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Button text="Edit Stage" onAction="#onEditStage"/>
+            <Button fx:id="editStageButton" text="Edit Stage" onAction="#onEditStage"/>
             <Button text="Remove Stage" onAction="#onRemoveStage" style="-fx-text-fill: #c0392b;"/>
         </HBox>
     </VBox>
 
     <Separator/>
 
-    <!-- Publishing Profiles Section -->
-    <VBox spacing="8">
-        <HBox alignment="CENTER_LEFT" spacing="10">
-            <Label text="Publishing Profiles:" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
-            <Region HBox.hgrow="ALWAYS"/>
-            <Button text="Manage Profiles" onAction="#onManageProfiles"/>
-        </HBox>
-        <Label fx:id="profilesCountLabel" text="0 profiles configured" style="-fx-text-fill: #666;"/>
-        <Label text="GetLate profiles: Settings > GetLate Accounts | Dev.to: Add 'devto' API key in Settings"
-               style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
-    </VBox>
-
-    <Separator/>
-
-    <HBox spacing="10" alignment="CENTER_RIGHT">
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Button text="App Settings" onAction="#onOpenSettings" style="-fx-background-color: #3498db; -fx-text-fill: white;"/>
         <Label fx:id="statusLabel" text="" style="-fx-text-fill: #666;" HBox.hgrow="ALWAYS"/>
         <Button text="Save" onAction="#onSave" style="-fx-font-weight: bold; -fx-background-color: #27ae60; -fx-text-fill: white;"/>
         <Button text="Cancel" onAction="#onCancel"/>

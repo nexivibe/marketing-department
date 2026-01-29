@@ -18,7 +18,7 @@ public class PipelineEditorDialogController {
 
     @FXML private TextField pipelineNameField;
     @FXML private ListView<PipelineStage> stagesListView;
-    @FXML private Label profilesCountLabel;
+    @FXML private Button editStageButton;
     @FXML private Label statusLabel;
 
     private Stage dialogStage;
@@ -57,9 +57,7 @@ public class PipelineEditorDialogController {
                     String text = formatStageName(stage);
                     setText(text);
 
-                    if (!stage.isEnabled()) {
-                        setStyle("-fx-text-fill: #999; -fx-font-style: italic;");
-                    } else if (stage.getType().isGatekeeper()) {
+                    if (stage.getType().isGatekeeper()) {
                         setStyle("-fx-font-weight: bold;");
                     } else {
                         setStyle("");
@@ -68,8 +66,20 @@ public class PipelineEditorDialogController {
             }
         });
 
+        // Add selection listener to show/hide Edit Stage button
+        stagesListView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            updateEditButtonVisibility(newVal);
+        });
+
         refreshStagesList();
-        updateProfilesCount();
+        updateEditButtonVisibility(null);
+    }
+
+    private void updateEditButtonVisibility(PipelineStage selected) {
+        // Only show Edit button for stages with editable settings (those requiring transforms)
+        boolean showEdit = selected != null && selected.getType().requiresTransform();
+        editStageButton.setVisible(showEdit);
+        editStageButton.setManaged(showEdit);
     }
 
     private String formatStageName(PipelineStage stage) {
@@ -92,21 +102,12 @@ public class PipelineEditorDialogController {
             sb.append(" [Required]");
         }
 
-        if (!stage.isEnabled()) {
-            sb.append(" [Disabled]");
-        }
-
         return sb.toString();
     }
 
     private void refreshStagesList() {
         stagesListView.getItems().clear();
         stagesListView.getItems().addAll(pipeline.getSortedStages());
-    }
-
-    private void updateProfilesCount() {
-        int count = appSettings.getPublishingProfiles().size();
-        profilesCountLabel.setText(count + " profile" + (count == 1 ? "" : "s") + " configured");
     }
 
     @FXML
@@ -316,14 +317,11 @@ public class PipelineEditorDialogController {
             return;
         }
 
-        if (selected.getType().isSocialStage()) {
-            // Show prompt editing dialog for social stages
+        // Only stages with editable prompts can be edited (GETLATE, DEV_TO)
+        if (selected.getType().requiresTransform()) {
             showStagePromptEditor(selected);
         } else {
-            // Simple enable/disable toggle for non-social stages
-            selected.setEnabled(!selected.isEnabled());
-            refreshStagesList();
-            statusLabel.setText(selected.isEnabled() ? "Stage enabled" : "Stage disabled");
+            statusLabel.setText(selected.getType().getDisplayName() + " has no editable settings");
         }
     }
 
@@ -335,11 +333,6 @@ public class PipelineEditorDialogController {
         // Create content
         javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10);
         content.setPadding(new javafx.geometry.Insets(10));
-
-        // Enabled checkbox
-        CheckBox enabledCheck = new CheckBox("Stage Enabled");
-        enabledCheck.setSelected(stage.isEnabled());
-        content.getChildren().add(enabledCheck);
 
         // Prompt text area
         Label promptLabel = new Label("Transform Prompt:");
@@ -369,7 +362,6 @@ public class PipelineEditorDialogController {
 
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(newPrompt -> {
-            stage.setEnabled(enabledCheck.isSelected());
             stage.setPrompt(newPrompt);
             refreshStagesList();
             statusLabel.setText("Stage updated");
@@ -404,18 +396,31 @@ public class PipelineEditorDialogController {
     }
 
     @FXML
-    private void onManageProfiles() {
-        // Direct user to Settings for profile management
-        Alert info = new Alert(Alert.AlertType.INFORMATION);
-        info.setTitle("Profile Management");
-        info.setHeaderText("Manage Profiles via Settings");
-        info.setContentText("Publishing profiles are now managed in the main Settings dialog.\n\n" +
-                "Go to: File > Settings > GetLate Accounts\n\n" +
-                "There you can:\n" +
-                "- Add your GetLate API key\n" +
-                "- Refresh connected accounts\n" +
-                "- Create publishing profiles");
-        info.showAndWait();
+    private void onOpenSettings() {
+        try {
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
+                    getClass().getResource("/ape/marketingdepartment/settings-dialog.fxml"));
+            javafx.scene.Parent root = loader.load();
+
+            Stage settingsStage = new Stage();
+            settingsStage.initModality(javafx.stage.Modality.WINDOW_MODAL);
+            settingsStage.initOwner(dialogStage);
+            settingsStage.setTitle("App Settings");
+            settingsStage.setScene(new javafx.scene.Scene(root));
+
+            SettingsController controller = loader.getController();
+            controller.initialize(appSettings, settingsStage);
+
+            settingsStage.showAndWait();
+
+            // Refresh the stages list in case profiles changed
+            refreshStagesList();
+
+        } catch (IOException e) {
+            ErrorDialog.showDetailed("Failed to Open Settings",
+                    "Could not open the settings dialog.",
+                    e.getMessage());
+        }
     }
 
     @FXML
