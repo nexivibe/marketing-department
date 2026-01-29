@@ -47,7 +47,9 @@
             <HBox alignment="CENTER_LEFT" spacing="10">
                 <Label text="Live Preview" style="-fx-font-weight: bold;"/>
                 <Region HBox.hgrow="ALWAYS"/>
-                <Button text="Refresh Preview" onAction="#onRefreshPreview"/>
+                <Label text="Post:" style="-fx-font-size: 11px;"/>
+                <ComboBox fx:id="previewPostCombo" prefWidth="200" onAction="#onPreviewPostChanged"/>
+                <Button text="Refresh" onAction="#onRefreshPreview" style="-fx-font-size: 11px;"/>
             </HBox>
             <WebView fx:id="previewWebView" VBox.vgrow="ALWAYS"/>
         </VBox>

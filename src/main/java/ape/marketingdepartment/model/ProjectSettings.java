@@ -22,6 +22,7 @@ public class ProjectSettings {
     private String tagSuggestionPrompt;
     private String uriSuggestionPrompt;
     private String descriptionSuggestionPrompt;
+    private String templateAiPrompt;  // Last used AI prompt for template editing
 
     public ProjectSettings() {
         this.selectedAgent = "grok";
@@ -133,6 +134,14 @@ public class ProjectSettings {
         this.descriptionSuggestionPrompt = descriptionSuggestionPrompt;
     }
 
+    public String getTemplateAiPrompt() {
+        return templateAiPrompt;
+    }
+
+    public void setTemplateAiPrompt(String templateAiPrompt) {
+        this.templateAiPrompt = templateAiPrompt;
+    }
+
     public static ProjectSettings load(Path projectPath) {
         Path settingsFile = projectPath.resolve(SETTINGS_FILE);
         if (!Files.exists(settingsFile)) {
@@ -212,6 +221,11 @@ public class ProjectSettings {
             settings.descriptionSuggestionPrompt = descPrompt;
         }
 
+        String templateAiPrompt = JsonHelper.extractStringField(json, "templateAiPrompt");
+        if (templateAiPrompt != null) {
+            settings.templateAiPrompt = templateAiPrompt;
+        }
+
         return settings;
     }
 
@@ -230,7 +244,8 @@ public class ProjectSettings {
         sb.append("  \"tagIndexUrl\": ").append(JsonHelper.toJsonString(tagIndexUrl)).append(",\n");
         sb.append("  \"tagSuggestionPrompt\": ").append(JsonHelper.toJsonString(tagSuggestionPrompt)).append(",\n");
         sb.append("  \"uriSuggestionPrompt\": ").append(JsonHelper.toJsonString(uriSuggestionPrompt)).append(",\n");
-        sb.append("  \"descriptionSuggestionPrompt\": ").append(JsonHelper.toJsonString(descriptionSuggestionPrompt)).append("\n");
+        sb.append("  \"descriptionSuggestionPrompt\": ").append(JsonHelper.toJsonString(descriptionSuggestionPrompt)).append(",\n");
+        sb.append("  \"templateAiPrompt\": ").append(JsonHelper.toJsonString(templateAiPrompt)).append("\n");
 
         sb.append("}");
         return sb.toString();

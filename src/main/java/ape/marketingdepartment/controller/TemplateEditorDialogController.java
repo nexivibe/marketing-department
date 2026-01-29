@@ -15,10 +15,12 @@ import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Controller for the template editor dialog.
@@ -42,11 +44,13 @@ public class TemplateEditorDialogController {
     @FXML private Button cancelButton;
     @FXML private Button applyAiButton;
     @FXML private ProgressIndicator aiProgressIndicator;
+    @FXML private ComboBox<Post> previewPostCombo;
 
     private Stage dialogStage;
     private AppSettings appSettings;
     private Project project;
-    private Post samplePost; // For preview
+    private Post selectedPost; // Currently selected post for preview
+    private List<Post> allPosts;
     private String originalTemplate;
     private boolean saved = false;
 
@@ -54,16 +58,19 @@ public class TemplateEditorDialogController {
     private final TemplateValidationService validationService = new TemplateValidationService();
     private AiServiceFactory aiServiceFactory;
 
-    public void initialize(Stage dialogStage, AppSettings appSettings, Project project, Post samplePost) {
+    public void initialize(Stage dialogStage, AppSettings appSettings, Project project, Post initialPost) {
         this.dialogStage = dialogStage;
         this.appSettings = appSettings;
         this.project = project;
-        this.samplePost = samplePost;
         this.aiServiceFactory = new AiServiceFactory(appSettings);
 
         dialogStage.setTitle("Template Editor - " + project.getSettings().getPostTemplate());
 
+        // Setup post dropdown
+        setupPostDropdown(initialPost);
+
         loadTemplate();
+        loadSavedAiPrompt();
         refreshPreview();
 
         // Track changes
@@ -72,6 +79,59 @@ public class TemplateEditorDialogController {
             saveButton.setDisable(!hasChanges);
             statusLabel.setText(hasChanges ? "* Unsaved changes" : "");
         });
+    }
+
+    private void setupPostDropdown(Post initialPost) {
+        allPosts = project.getPosts();
+
+        // Setup converter to show post title in dropdown
+        previewPostCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(Post post) {
+                return post != null ? post.getTitle() : "";
+            }
+
+            @Override
+            public Post fromString(String string) {
+                return null; // Not needed for non-editable combo
+            }
+        });
+
+        previewPostCombo.getItems().addAll(allPosts);
+
+        // Select initial post or first available
+        if (initialPost != null && allPosts.contains(initialPost)) {
+            previewPostCombo.setValue(initialPost);
+            selectedPost = initialPost;
+        } else if (!allPosts.isEmpty()) {
+            previewPostCombo.setValue(allPosts.getFirst());
+            selectedPost = allPosts.getFirst();
+        }
+    }
+
+    @FXML
+    private void onPreviewPostChanged() {
+        selectedPost = previewPostCombo.getValue();
+        refreshPreview();
+    }
+
+    private void loadSavedAiPrompt() {
+        String savedPrompt = project.getSettings().getTemplateAiPrompt();
+        if (savedPrompt != null && !savedPrompt.isBlank()) {
+            aiPromptArea.setText(savedPrompt);
+        }
+    }
+
+    private void saveAiPrompt() {
+        String prompt = aiPromptArea.getText();
+        if (prompt != null && !prompt.isBlank()) {
+            project.getSettings().setTemplateAiPrompt(prompt);
+            try {
+                project.saveSettings();
+            } catch (IOException e) {
+                // Ignore - not critical
+            }
+        }
     }
 
     private void loadTemplate() {
@@ -95,10 +155,10 @@ public class TemplateEditorDialogController {
     }
 
     private void refreshPreview() {
-        if (samplePost == null) {
+        if (selectedPost == null) {
             previewWebView.getEngine().loadContent(
                     "<html><body style='font-family: sans-serif; color: #888; padding: 20px;'>" +
-                    "<p>No post selected for preview.</p><p>Select a post to see the template in action.</p>" +
+                    "<p>No post selected for preview.</p><p>Select a post from the dropdown to see the template in action.</p>" +
                     "</body></html>");
             return;
         }
@@ -108,7 +168,7 @@ public class TemplateEditorDialogController {
             String template = templateArea.getText();
 
             // Use a simplified preview - just render the template
-            String preview = webExportService.generatePreviewWithTemplate(project, samplePost, template);
+            String preview = webExportService.generatePreviewWithTemplate(project, selectedPost, template);
             previewWebView.getEngine().loadContent(preview);
         } catch (Exception e) {
             previewWebView.getEngine().loadContent(
@@ -171,6 +231,9 @@ public class TemplateEditorDialogController {
             aiStatusLabel.setText("Please enter a prompt describing the changes you want.");
             return;
         }
+
+        // Save the AI prompt for next time
+        saveAiPrompt();
 
         String agentName = project.getSettings().getSelectedAgent();
         AiReviewService service = aiServiceFactory.getService(agentName);
@@ -258,20 +321,27 @@ public class TemplateEditorDialogController {
         return """
                 You are a web template expert. Modify the following HTML/Mustache template according to the user's request.
 
-                IMPORTANT RULES:
-                1. Return ONLY the complete modified template, no explanations
-                2. Preserve all existing Mustache variables: {{variable}}, {{{unescaped}}}, {{#section}}...{{/section}}
-                3. Keep the template valid HTML5
-                4. Maintain SEO best practices (meta tags, semantic HTML, structured data)
-                5. The template uses these variables:
-                   - {{title}}, {{author}}, {{date}}, {{dateIso}}, {{readTime}}
-                   - {{description}} - SEO meta description
-                   - {{{content}}} - Main HTML content (unescaped)
-                   - {{#tags}}...{{/tags}} - Section if tags exist
-                   - {{#tagsList}}{{name}}, {{url}}{{/tagsList}} - Tag iteration
-                   - {{canonicalUrl}}, {{siteName}}, {{ogImage}}
-                   - {{tagsCommaSeparated}}, {{wordCount}}
-                   - {{{verificationComment}}} - Hidden verification code
+                CRITICAL - PRESERVE ALL METADATA:
+                1. Keep ALL <meta> tags in <head> section intact (SEO, Open Graph, Twitter Cards)
+                2. Keep the JSON-LD structured data script intact
+                3. Keep the {{{verificationComment}}} for deployment verification
+                4. Keep the <link rel="canonical"> tag
+                5. Do NOT remove or modify any existing Mustache variables unless specifically requested
+
+                TEMPLATE RULES:
+                1. Return ONLY the complete modified template, no explanations or markdown code fences
+                2. Preserve all Mustache syntax: {{variable}}, {{{unescaped}}}, {{#section}}...{{/section}}, {{^section}}...{{/section}}
+                3. Keep the template valid HTML5 with proper DOCTYPE
+                4. Maintain responsive design and accessibility
+
+                AVAILABLE VARIABLES:
+                - {{title}}, {{author}}, {{date}}, {{dateIso}}, {{readTime}}
+                - {{description}} - SEO meta description (REQUIRED in meta tags)
+                - {{{content}}} - Main HTML content (unescaped)
+                - {{#tags}}...{{/tags}} - Section rendered if tags exist
+                - {{#tagsList}}{{name}}, {{url}}{{/tagsList}} - Iterate over tags with name and URL
+                - {{canonicalUrl}}, {{siteName}}, {{ogImage}}, {{tagsCommaSeparated}}, {{wordCount}}
+                - {{{verificationComment}}} - Hidden verification code (MUST preserve)
 
                 USER REQUEST: """ + userRequest + """
 
