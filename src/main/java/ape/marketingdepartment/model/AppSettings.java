@@ -17,7 +17,6 @@ public class AppSettings {
     private List<String> recentProjects;
     private List<ApiKey> apiKeys;
     private List<PublishingProfile> publishingProfiles;
-    private BrowserSettings browserSettings;
     private List<GrokModel> cachedGrokModels;
     private String selectedGrokModel;
 
@@ -25,7 +24,6 @@ public class AppSettings {
         this.recentProjects = new ArrayList<>();
         this.apiKeys = new ArrayList<>();
         this.publishingProfiles = new ArrayList<>();
-        this.browserSettings = new BrowserSettings();
         this.cachedGrokModels = new ArrayList<>();
         this.selectedGrokModel = "grok-2"; // Default model
     }
@@ -86,14 +84,6 @@ public class AppSettings {
                 .filter(p -> id.equals(p.getId()))
                 .findFirst()
                 .orElse(null);
-    }
-
-    public BrowserSettings getBrowserSettings() {
-        return browserSettings;
-    }
-
-    public void setBrowserSettings(BrowserSettings browserSettings) {
-        this.browserSettings = browserSettings;
     }
 
     public List<GrokModel> getCachedGrokModels() {
@@ -169,13 +159,11 @@ public class AppSettings {
         // Parse publishing profiles
         List<String> profileJsons = JsonHelper.extractObjectArray(json, "publishingProfiles");
         for (String profileJson : profileJsons) {
-            settings.publishingProfiles.add(PublishingProfile.fromJson(profileJson));
-        }
-
-        // Parse browser settings
-        String browserJson = JsonHelper.extractObjectField(json, "browserSettings");
-        if (browserJson != null) {
-            settings.browserSettings = BrowserSettings.fromJson(browserJson);
+            PublishingProfile profile = PublishingProfile.fromJson(profileJson);
+            // Only add profiles that have GetLate account ID (skip legacy browser-based profiles)
+            if (profile.getGetLateAccountId() != null && !profile.getGetLateAccountId().isBlank()) {
+                settings.publishingProfiles.add(profile);
+            }
         }
 
         // Parse cached Grok models
@@ -221,9 +209,6 @@ public class AppSettings {
             sb.append("    ").append(publishingProfiles.get(i).toJson());
         }
         sb.append("\n  ],\n");
-
-        // Browser settings
-        sb.append("  \"browserSettings\": ").append(browserSettings.toJson()).append(",\n");
 
         // Cached Grok models
         sb.append("  \"cachedGrokModels\": [\n");

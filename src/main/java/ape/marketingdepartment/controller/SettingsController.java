@@ -2,44 +2,41 @@ package ape.marketingdepartment.controller;
 
 import ape.marketingdepartment.model.ApiKey;
 import ape.marketingdepartment.model.AppSettings;
-import ape.marketingdepartment.model.BrowserSettings;
 import ape.marketingdepartment.model.GrokModel;
 import ape.marketingdepartment.model.PublishingProfile;
 import ape.marketingdepartment.service.ai.GrokService;
-import ape.marketingdepartment.service.browser.ChromeDetector;
-import ape.marketingdepartment.service.publishing.PublishingService;
-import ape.marketingdepartment.service.publishing.PublishingServiceFactory;
+import ape.marketingdepartment.service.getlate.GetLateAccount;
+import ape.marketingdepartment.service.getlate.GetLateService;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
-import javafx.stage.FileChooser;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
 public class SettingsController {
     @FXML private ListView<ApiKey> apiKeysList;
     @FXML private ListView<PublishingProfile> profilesList;
-    @FXML private TextField chromePathField;
-    @FXML private CheckBox headlessCheckbox;
-    @FXML private ListView<String> detectedChromeList;
-    @FXML private Label osLabel;
+    @FXML private ListView<GetLateAccount> getLateAccountsList;
     @FXML private ComboBox<GrokModel> grokModelCombo;
     @FXML private Button refreshModelsButton;
+    @FXML private Button refreshAccountsButton;
     @FXML private Label modelDescriptionLabel;
     @FXML private Label modelStatusLabel;
+    @FXML private Label accountsStatusLabel;
 
     private AppSettings settings;
     private Stage dialogStage;
+    private GetLateService getLateService;
 
     public void initialize(AppSettings settings, Stage dialogStage) {
         this.settings = settings;
         this.dialogStage = dialogStage;
+        this.getLateService = new GetLateService(settings);
 
         loadSettings();
     }
@@ -51,24 +48,6 @@ public class SettingsController {
         profilesList.getItems().clear();
         profilesList.getItems().addAll(settings.getPublishingProfiles());
 
-        BrowserSettings bs = settings.getBrowserSettings();
-        chromePathField.setText(bs.getChromePath());
-        headlessCheckbox.setSelected(bs.isHeadless());
-
-        // Show detected OS
-        ChromeDetector.OS os = ChromeDetector.detectOS();
-        osLabel.setText("Detected OS: " + os.name());
-
-        // Setup double-click on detected Chrome list to select
-        detectedChromeList.setOnMouseClicked(event -> {
-            if (event.getClickCount() == 2) {
-                String selected = detectedChromeList.getSelectionModel().getSelectedItem();
-                if (selected != null) {
-                    chromePathField.setText(selected);
-                }
-            }
-        });
-
         // Load Grok model selection
         loadGrokModels();
 
@@ -79,6 +58,9 @@ public class SettingsController {
                 updateModelDescription(selected);
             }
         });
+
+        // Check GetLate status
+        updateGetLateStatus();
     }
 
     private void loadGrokModels() {
@@ -137,6 +119,16 @@ public class SettingsController {
         modelDescriptionLabel.setText(desc.toString());
     }
 
+    private void updateGetLateStatus() {
+        if (getLateService.isConfigured()) {
+            accountsStatusLabel.setText("GetLate API configured - click Refresh to load accounts");
+            refreshAccountsButton.setDisable(false);
+        } else {
+            accountsStatusLabel.setText("Add a 'getlate' API key to enable social publishing");
+            refreshAccountsButton.setDisable(true);
+        }
+    }
+
     @FXML
     private void onRefreshModels() {
         // Check if API key is configured
@@ -152,7 +144,7 @@ public class SettingsController {
         GrokService grokService = new GrokService(settings);
         grokService.fetchAvailableModels()
                 .thenAccept(models -> {
-                    javafx.application.Platform.runLater(() -> {
+                    Platform.runLater(() -> {
                         refreshModelsButton.setDisable(false);
 
                         if (models.isEmpty()) {
@@ -191,7 +183,7 @@ public class SettingsController {
                     });
                 })
                 .exceptionally(ex -> {
-                    javafx.application.Platform.runLater(() -> {
+                    Platform.runLater(() -> {
                         refreshModelsButton.setDisable(false);
                         modelStatusLabel.setText("Failed to fetch models");
                         showError("Failed to Fetch Models", ex.getMessage());
@@ -201,34 +193,37 @@ public class SettingsController {
     }
 
     @FXML
-    private void onInferChrome() {
-        detectedChromeList.getItems().clear();
-        List<String> foundPaths = ChromeDetector.findInstalledChrome();
-
-        if (foundPaths.isEmpty()) {
-            detectedChromeList.getItems().add("(No Chrome installations found)");
-        } else {
-            detectedChromeList.getItems().addAll(foundPaths);
-            // Auto-select first one if no path is currently set
-            if (chromePathField.getText() == null || chromePathField.getText().isEmpty()) {
-                chromePathField.setText(foundPaths.get(0));
-            }
-        }
-    }
-
-    @FXML
-    private void onTestChrome() {
-        String path = chromePathField.getText();
-        if (path == null || path.isEmpty()) {
-            showError("No Path", "Please enter or select a Chrome path first.");
+    private void onRefreshAccounts() {
+        if (!getLateService.isConfigured()) {
+            showError("API Key Required", "Please add a GetLate API key first.");
             return;
         }
 
-        if (ChromeDetector.testChromePath(path)) {
-            showInfo("Chrome Found", "Chrome executable found and is accessible:\n" + path);
-        } else {
-            showError("Chrome Not Found", "Chrome executable not found or not accessible at:\n" + path);
-        }
+        refreshAccountsButton.setDisable(true);
+        accountsStatusLabel.setText("Fetching accounts from GetLate...");
+
+        getLateService.fetchAccounts()
+                .thenAccept(accounts -> {
+                    Platform.runLater(() -> {
+                        refreshAccountsButton.setDisable(false);
+                        getLateAccountsList.getItems().clear();
+                        getLateAccountsList.getItems().addAll(accounts);
+
+                        if (accounts.isEmpty()) {
+                            accountsStatusLabel.setText("No accounts found - connect accounts at getlate.dev");
+                        } else {
+                            accountsStatusLabel.setText("Found " + accounts.size() + " accounts - double-click to create profile");
+                        }
+                    });
+                })
+                .exceptionally(ex -> {
+                    Platform.runLater(() -> {
+                        refreshAccountsButton.setDisable(false);
+                        accountsStatusLabel.setText("Failed to fetch accounts");
+                        showError("Failed to Fetch Accounts", ex.getMessage());
+                    });
+                    return null;
+                });
     }
 
     @FXML
@@ -239,6 +234,9 @@ public class SettingsController {
             settings.addApiKey(apiKey);
             apiKeysList.getItems().clear();
             apiKeysList.getItems().addAll(settings.getApiKeys());
+            // Refresh GetLate status
+            this.getLateService = new GetLateService(settings);
+            updateGetLateStatus();
         });
     }
 
@@ -256,6 +254,9 @@ public class SettingsController {
             settings.addApiKey(apiKey);
             apiKeysList.getItems().clear();
             apiKeysList.getItems().addAll(settings.getApiKeys());
+            // Refresh GetLate status
+            this.getLateService = new GetLateService(settings);
+            updateGetLateStatus();
         });
     }
 
@@ -265,11 +266,21 @@ public class SettingsController {
         if (selected != null) {
             settings.removeApiKey(selected);
             apiKeysList.getItems().remove(selected);
+            // Refresh GetLate status
+            this.getLateService = new GetLateService(settings);
+            updateGetLateStatus();
         }
     }
 
     @FXML
     private void onAddProfile() {
+        // Check if there are GetLate accounts to choose from
+        if (getLateAccountsList.getItems().isEmpty()) {
+            showInfo("Fetch Accounts First",
+                    "Please add a GetLate API key and click 'Refresh Accounts' to load your connected social accounts.");
+            return;
+        }
+
         Dialog<PublishingProfile> dialog = createProfileDialog(null);
         Optional<PublishingProfile> result = dialog.showAndWait();
         result.ifPresent(profile -> {
@@ -297,47 +308,6 @@ public class SettingsController {
     }
 
     @FXML
-    private void onLoginProfile() {
-        PublishingProfile selected = profilesList.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showInfo("No Profile Selected", "Please select a profile to log in.");
-            return;
-        }
-
-        // Create browser profile directory if it doesn't exist
-        Path profilePath = Path.of(selected.getBrowserProfilePath().replace("~", System.getProperty("user.home")));
-        try {
-            Files.createDirectories(profilePath);
-        } catch (Exception e) {
-            showError("Failed to Create Profile Directory", e.getMessage());
-            return;
-        }
-
-        // Save settings first to ensure browser settings are up to date
-        BrowserSettings bs = new BrowserSettings(
-                chromePathField.getText(),
-                headlessCheckbox.isSelected()
-        );
-        settings.setBrowserSettings(bs);
-        settings.save();
-
-        showInfo("Login Required",
-                "A browser window will open. Please log in to " + selected.getPlatform() +
-                " manually, then close the browser. Your session will be saved.\n\n" +
-                "Profile path: " + profilePath);
-
-        // Open browser for login
-        PublishingServiceFactory factory = new PublishingServiceFactory(settings.getBrowserSettings());
-        PublishingService service = factory.getService(selected.getPlatform());
-        if (service != null) {
-            // Run in background thread to not block UI
-            new Thread(() -> {
-                service.openForLogin(selected);
-            }).start();
-        }
-    }
-
-    @FXML
     private void onRemoveProfile() {
         PublishingProfile selected = profilesList.getSelectionModel().getSelectedItem();
         if (selected != null) {
@@ -347,23 +317,31 @@ public class SettingsController {
     }
 
     @FXML
-    private void onBrowseChrome() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Select Chrome Executable");
-        File file = chooser.showOpenDialog(dialogStage);
-        if (file != null) {
-            chromePathField.setText(file.getAbsolutePath());
+    private void onCreateProfileFromAccount() {
+        GetLateAccount selected = getLateAccountsList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showInfo("No Account Selected", "Please select an account from the list.");
+            return;
         }
+
+        // Create a profile from the GetLate account
+        PublishingProfile profile = new PublishingProfile();
+        profile.setName(selected.getDisplayString());
+        profile.setPlatform(selected.platform());
+        profile.setGetLateAccountId(selected.id());
+        profile.setGetLateUsername(selected.username());
+
+        // Allow user to customize before saving
+        Dialog<PublishingProfile> dialog = createProfileDialog(profile);
+        Optional<PublishingProfile> result = dialog.showAndWait();
+        result.ifPresent(p -> {
+            settings.addPublishingProfile(p);
+            profilesList.getItems().add(p);
+        });
     }
 
     @FXML
     private void onSave() {
-        BrowserSettings bs = new BrowserSettings(
-                chromePathField.getText(),
-                headlessCheckbox.isSelected()
-        );
-        settings.setBrowserSettings(bs);
-
         // Save selected Grok model
         GrokModel selectedModel = grokModelCombo.getValue();
         if (selectedModel != null) {
@@ -392,7 +370,7 @@ public class SettingsController {
         grid.setPadding(new Insets(20, 150, 10, 10));
 
         ComboBox<String> serviceCombo = new ComboBox<>();
-        serviceCombo.getItems().addAll("grok");
+        serviceCombo.getItems().addAll("grok", "getlate", "devto");
         serviceCombo.setEditable(true);
 
         TextField keyField = new TextField();
@@ -417,6 +395,12 @@ public class SettingsController {
         grid.add(new Label("Description:"), 0, 2);
         grid.add(descField, 1, 2);
 
+        // Add help text
+        Label helpLabel = new Label("grok: AI for content generation (console.x.ai)\ngetlate: Social publishing (getlate.dev)");
+        helpLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        helpLabel.setWrapText(true);
+        grid.add(helpLabel, 0, 3, 2, 1);
+
         dialog.getDialogPane().setContent(grid);
 
         dialog.setResultConverter(buttonType -> {
@@ -437,7 +421,7 @@ public class SettingsController {
     private Dialog<PublishingProfile> createProfileDialog(PublishingProfile existing) {
         Dialog<PublishingProfile> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? "Add Publishing Profile" : "Edit Publishing Profile");
-        dialog.setHeaderText("Enter profile details");
+        dialog.setHeaderText("Configure GetLate publishing profile");
 
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
@@ -448,37 +432,66 @@ public class SettingsController {
 
         TextField nameField = new TextField();
         nameField.setPromptText("Profile Name");
+        nameField.setPrefWidth(300);
 
         ComboBox<String> platformCombo = new ComboBox<>();
-        platformCombo.getItems().addAll("linkedin", "twitter");
+        platformCombo.getItems().addAll(GetLateService.getSupportedPlatforms());
 
-        TextField pathField = new TextField();
-        pathField.setPromptText("Browser Profile Path");
-        pathField.setPrefWidth(300);
+        ComboBox<GetLateAccount> accountCombo = new ComboBox<>();
+        accountCombo.getItems().addAll(getLateAccountsList.getItems());
+        accountCombo.setConverter(new javafx.util.StringConverter<>() {
+            @Override
+            public String toString(GetLateAccount account) {
+                return account != null ? account.getDisplayString() : "";
+            }
+            @Override
+            public GetLateAccount fromString(String string) {
+                return null;
+            }
+        });
+
+        CheckBox includeUrlCheck = new CheckBox("Include post URL in content");
+        ComboBox<String> urlPlacementCombo = new ComboBox<>();
+        urlPlacementCombo.getItems().addAll("start", "end");
+        urlPlacementCombo.setValue("end");
 
         if (existing != null) {
             nameField.setText(existing.getName());
             platformCombo.setValue(existing.getPlatform());
-            pathField.setText(existing.getBrowserProfilePath());
+            includeUrlCheck.setSelected(existing.includesUrl());
+            urlPlacementCombo.setValue(existing.getUrlPlacement());
+
+            // Try to find matching account
+            for (GetLateAccount account : getLateAccountsList.getItems()) {
+                if (account.id().equals(existing.getGetLateAccountId())) {
+                    accountCombo.setValue(account);
+                    break;
+                }
+            }
         } else {
-            platformCombo.setValue("linkedin");
-            pathField.setText("~/.marketing-department/browser-profiles/");
+            platformCombo.setValue("twitter");
         }
 
-        // Auto-generate profile path based on name
-        nameField.textProperty().addListener((obs, oldVal, newVal) -> {
-            if (!newVal.isEmpty()) {
-                String safeName = newVal.toLowerCase().replaceAll("[^a-z0-9]", "-");
-                pathField.setText("~/.marketing-department/browser-profiles/" + safeName);
+        // Auto-select platform when account is selected
+        accountCombo.setOnAction(e -> {
+            GetLateAccount selected = accountCombo.getValue();
+            if (selected != null) {
+                platformCombo.setValue(selected.platform());
+                if (nameField.getText() == null || nameField.getText().isBlank()) {
+                    nameField.setText(selected.getDisplayString());
+                }
             }
         });
 
         grid.add(new Label("Name:"), 0, 0);
         grid.add(nameField, 1, 0);
-        grid.add(new Label("Platform:"), 0, 1);
-        grid.add(platformCombo, 1, 1);
-        grid.add(new Label("Browser Profile:"), 0, 2);
-        grid.add(pathField, 1, 2);
+        grid.add(new Label("GetLate Account:"), 0, 1);
+        grid.add(accountCombo, 1, 1);
+        grid.add(new Label("Platform:"), 0, 2);
+        grid.add(platformCombo, 1, 2);
+        grid.add(includeUrlCheck, 0, 3, 2, 1);
+        grid.add(new Label("URL Placement:"), 0, 4);
+        grid.add(urlPlacementCombo, 1, 4);
 
         dialog.getDialogPane().setContent(grid);
 
@@ -486,11 +499,27 @@ public class SettingsController {
             if (buttonType == ButtonType.OK) {
                 String name = nameField.getText().trim();
                 String platform = platformCombo.getValue();
-                String path = pathField.getText().trim();
-                if (name.isEmpty() || platform == null || path.isEmpty()) {
+                GetLateAccount account = accountCombo.getValue();
+
+                if (name.isEmpty() || platform == null || account == null) {
                     return null;
                 }
-                return new PublishingProfile(name, platform, path);
+
+                PublishingProfile profile;
+                if (existing != null) {
+                    profile = existing;
+                    profile.setName(name);
+                } else {
+                    profile = new PublishingProfile(name, platform, account.id());
+                }
+
+                profile.setPlatform(platform);
+                profile.setGetLateAccountId(account.id());
+                profile.setGetLateUsername(account.username());
+                profile.setSetting("includeUrl", String.valueOf(includeUrlCheck.isSelected()));
+                profile.setSetting("urlPlacement", urlPlacementCombo.getValue());
+
+                return profile;
             }
             return null;
         });

@@ -1,31 +1,34 @@
 package ape.marketingdepartment.model;
 
-import ape.marketingdepartment.model.pipeline.AuthMethod;
 import ape.marketingdepartment.service.JsonHelper;
+import ape.marketingdepartment.service.getlate.GetLateService;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * A publishing profile for GetLate social posting.
+ * Each profile represents a specific GetLate account and its posting configuration.
+ */
 public class PublishingProfile {
     private String id;
     private String name;
-    private String platform;
-    private AuthMethod authMethod;
-    private String browserProfilePath;
+    private String platform;           // GetLate platform name (twitter, linkedin, etc.)
+    private String getLateAccountId;   // GetLate account ID
+    private String getLateUsername;    // Username for display
     private Map<String, String> settings;
 
     public PublishingProfile() {
         this.id = UUID.randomUUID().toString();
-        this.authMethod = AuthMethod.MANUAL_BROWSER;
         this.settings = new HashMap<>();
     }
 
-    public PublishingProfile(String name, String platform, String browserProfilePath) {
+    public PublishingProfile(String name, String platform, String getLateAccountId) {
         this();
         this.name = name;
         this.platform = platform;
-        this.browserProfilePath = browserProfilePath;
+        this.getLateAccountId = getLateAccountId;
     }
 
     public String getId() {
@@ -52,20 +55,20 @@ public class PublishingProfile {
         this.platform = platform;
     }
 
-    public AuthMethod getAuthMethod() {
-        return authMethod;
+    public String getGetLateAccountId() {
+        return getLateAccountId;
     }
 
-    public void setAuthMethod(AuthMethod authMethod) {
-        this.authMethod = authMethod;
+    public void setGetLateAccountId(String getLateAccountId) {
+        this.getLateAccountId = getLateAccountId;
     }
 
-    public String getBrowserProfilePath() {
-        return browserProfilePath;
+    public String getGetLateUsername() {
+        return getLateUsername;
     }
 
-    public void setBrowserProfilePath(String browserProfilePath) {
-        this.browserProfilePath = browserProfilePath;
+    public void setGetLateUsername(String getLateUsername) {
+        this.getLateUsername = getLateUsername;
     }
 
     public Map<String, String> getSettings() {
@@ -106,6 +109,13 @@ public class PublishingProfile {
         return settings.getOrDefault("urlPlacement", "end");
     }
 
+    /**
+     * Get display name for the platform.
+     */
+    public String getPlatformDisplayName() {
+        return GetLateService.getPlatformDisplayName(platform);
+    }
+
     public static PublishingProfile fromJson(String json) {
         PublishingProfile profile = new PublishingProfile();
 
@@ -116,13 +126,11 @@ public class PublishingProfile {
 
         profile.name = JsonHelper.extractStringField(json, "name");
         profile.platform = JsonHelper.extractStringField(json, "platform");
+        profile.getLateAccountId = JsonHelper.extractStringField(json, "getLateAccountId");
+        profile.getLateUsername = JsonHelper.extractStringField(json, "getLateUsername");
 
-        String authMethodStr = JsonHelper.extractStringField(json, "authMethod");
-        if (authMethodStr != null) {
-            profile.authMethod = AuthMethod.fromString(authMethodStr);
-        }
-
-        profile.browserProfilePath = JsonHelper.extractStringField(json, "browserProfilePath");
+        // Legacy: convert old browserProfilePath-based profiles
+        // Just ignore the old fields
 
         // Parse settings object
         String settingsJson = JsonHelper.extractObjectField(json, "settings");
@@ -146,8 +154,8 @@ public class PublishingProfile {
         sb.append("      \"id\": ").append(JsonHelper.toJsonString(id)).append(",\n");
         sb.append("      \"name\": ").append(JsonHelper.toJsonString(name)).append(",\n");
         sb.append("      \"platform\": ").append(JsonHelper.toJsonString(platform)).append(",\n");
-        sb.append("      \"authMethod\": ").append(JsonHelper.toJsonString(authMethod.name())).append(",\n");
-        sb.append("      \"browserProfilePath\": ").append(JsonHelper.toJsonString(browserProfilePath));
+        sb.append("      \"getLateAccountId\": ").append(JsonHelper.toJsonString(getLateAccountId)).append(",\n");
+        sb.append("      \"getLateUsername\": ").append(JsonHelper.toJsonString(getLateUsername));
 
         if (!settings.isEmpty()) {
             sb.append(",\n      \"settings\": {\n");
@@ -167,6 +175,13 @@ public class PublishingProfile {
 
     @Override
     public String toString() {
-        return name + " (" + platform + ")";
+        StringBuilder sb = new StringBuilder();
+        sb.append(name);
+        sb.append(" (").append(getPlatformDisplayName());
+        if (getLateUsername != null && !getLateUsername.isBlank()) {
+            sb.append(": @").append(getLateUsername);
+        }
+        sb.append(")");
+        return sb.toString();
     }
 }

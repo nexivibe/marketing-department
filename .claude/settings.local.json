@@ -13,7 +13,11 @@
       "Bash(ls:*)",
       "Bash(mvn package:*)",
       "Bash(find:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "WebFetch(domain:getlate.dev)",
+      "WebFetch(domain:docs.getlate.dev)",
+      "WebSearch",
+      "WebFetch(domain:developers.forem.com)"
     ]
   }
 }

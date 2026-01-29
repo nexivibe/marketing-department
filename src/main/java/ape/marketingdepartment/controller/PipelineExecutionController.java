@@ -2,7 +2,11 @@ package ape.marketingdepartment.controller;
 
 import ape.marketingdepartment.model.*;
 import ape.marketingdepartment.model.pipeline.*;
+import ape.marketingdepartment.service.PublishingLogger;
 import ape.marketingdepartment.service.pipeline.PipelineExecutionService;
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
@@ -10,8 +14,11 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,6 +34,10 @@ public class PipelineExecutionController {
     @FXML private ComboBox<PipelineStage> previewStageCombo;
     @FXML private TextArea transformPreviewArea;
     @FXML private Label statusLabel;
+    @FXML private Label timerLabel;
+    @FXML private ProgressIndicator progressIndicator;
+    @FXML private TextArea logArea;
+    @FXML private Button clearLogButton;
 
     private Stage dialogStage;
     private AppSettings appSettings;
@@ -38,6 +49,12 @@ public class PipelineExecutionController {
     private Map<String, String> transformCache;
     private Map<String, HBox> stageCards;
 
+    // Logging and timer support
+    private PublishingLogger publishingLogger;
+    private Timeline operationTimer;
+    private long operationStartTime;
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+
     public void initialize(Stage dialogStage, AppSettings appSettings, Project project, Post post) {
         this.dialogStage = dialogStage;
         this.appSettings = appSettings;
@@ -47,10 +64,18 @@ public class PipelineExecutionController {
         this.transformCache = new HashMap<>();
         this.stageCards = new HashMap<>();
 
+        // Set up the publishing logger
+        this.publishingLogger = new PublishingLogger();
+        this.publishingLogger.setLogListener(this::onLogEntry);
+        this.executionService.setLogger(publishingLogger);
+
         loadPipeline();
         loadExecution();
         setupUI();
         buildStageCards();
+
+        // Log initialization
+        appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Pipeline opened for: " + post.getTitle());
     }
 
     private void loadPipeline() {
@@ -190,11 +215,18 @@ public class PipelineExecutionController {
                 }
                 return "URL will be built from: " + urlBase;
             }
-            case LINKEDIN, TWITTER -> {
+            case GETLATE -> {
                 PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
                 if (profile != null && profile.includesUrl()) {
                     String placement = profile.getUrlPlacement();
                     return "URL will be added at " + (placement != null ? placement : "end");
+                }
+                return "";
+            }
+            case DEV_TO -> {
+                boolean includeCanonical = stage.getStageSettingBoolean("includeCanonical", true);
+                if (includeCanonical) {
+                    return "Canonical URL will link to web export";
                 }
                 return "";
             }
@@ -236,22 +268,11 @@ public class PipelineExecutionController {
         if (stage.getType().isSocialStage()) {
             PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
             if (profile != null) {
-                String authLabel = getAuthMethodLabel(profile.getAuthMethod());
-                return stage.getType().getDisplayName() + ": " + profile.getName() + " [" + authLabel + "]";
+                String platformLabel = ape.marketingdepartment.service.getlate.GetLateService.getPlatformDisplayName(profile.getPlatform());
+                return stage.getType().getDisplayName() + ": " + profile.getName() + " [" + platformLabel + "]";
             }
         }
         return stage.getType().getDisplayName();
-    }
-
-    private String getAuthMethodLabel(ape.marketingdepartment.model.pipeline.AuthMethod authMethod) {
-        if (authMethod == null) {
-            return "Browser";
-        }
-        return switch (authMethod) {
-            case MANUAL_BROWSER -> "Browser";
-            case API_KEY -> "API";
-            case OAUTH -> "OAuth";
-        };
     }
 
     private void updateStageStatuses() {
@@ -384,7 +405,8 @@ public class PipelineExecutionController {
         return switch (stage.getType()) {
             case WEB_EXPORT -> "Export HTML";
             case URL_VERIFY -> "Test Liveness";
-            case LINKEDIN, TWITTER -> "Publish Now";
+            case GETLATE -> "Publish Now";
+            case DEV_TO -> "Publish to Dev.to";
         };
     }
 
@@ -402,11 +424,14 @@ public class PipelineExecutionController {
         switch (stage.getType()) {
             case WEB_EXPORT -> executeWebExport(stage);
             case URL_VERIFY -> executeUrlVerify(stage);
-            case LINKEDIN, TWITTER -> executeSocialPublish(stage);
+            case GETLATE -> executeSocialPublish(stage);
+            case DEV_TO -> executeDevToPublish(stage);
         }
     }
 
     private void executeWebExport(PipelineStage stage) {
+        Platform.runLater(() -> startOperationTimer("Web Export"));
+
         new Thread(() -> {
             PipelineExecution.StageResult result = executionService.executeWebExport(
                     project, post, execution,
@@ -414,14 +439,26 @@ public class PipelineExecutionController {
             );
 
             Platform.runLater(() -> {
+                String resultText = result.getStatus() == PipelineStageStatus.COMPLETED ?
+                        "Web export completed" : "Web export " + result.getStatus().name().toLowerCase();
+                stopOperationTimer(resultText);
+
                 execution.setStageResult(stage.getId(), result);
                 saveExecution();
                 updateStageStatuses();
+
+                if (result.getStatus() == PipelineStageStatus.FAILED) {
+                    ErrorDialog.showDetailed("Web Export Failed",
+                            "Failed to export HTML for this post.",
+                            result.getMessage());
+                }
             });
         }).start();
     }
 
     private void executeUrlVerify(PipelineStage stage) {
+        Platform.runLater(() -> startOperationTimer("URL Verification"));
+
         new Thread(() -> {
             PipelineExecution.StageResult result = executionService.executeUrlVerify(
                     project, post, execution, stage,
@@ -429,20 +466,39 @@ public class PipelineExecutionController {
             );
 
             Platform.runLater(() -> {
+                String resultText = result.getStatus() == PipelineStageStatus.COMPLETED ?
+                        "URL verified" : "URL verification " + result.getStatus().name().toLowerCase();
+                stopOperationTimer(resultText);
+
                 execution.setStageResult(stage.getId(), result);
                 saveExecution();
                 updateStageStatuses();
+
+                if (result.getStatus() == PipelineStageStatus.FAILED) {
+                    ErrorDialog.showDetailed("URL Verification Failed",
+                            "The published URL could not be verified.",
+                            result.getMessage());
+                }
             });
         }).start();
     }
 
     private void executeSocialPublish(PipelineStage stage) {
+        // Get platform name for display
+        PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
+        String platformName = profile != null ?
+                ape.marketingdepartment.service.getlate.GetLateService.getPlatformDisplayName(profile.getPlatform()) :
+                "Social";
+
+        Platform.runLater(() -> startOperationTimer(platformName + " Publish"));
+
         // First check if we have a cached transform
         String cachedTransform = transformCache.get(stage.getCacheKey());
 
         if (cachedTransform == null || cachedTransform.isBlank()) {
             // Need to generate transform first
-            updateStatus("Generating transform for " + stage.getType().getDisplayName() + "...");
+            updateStatus("Generating transform for " + platformName + "...");
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Generating content transform for " + platformName + "...");
 
             executionService.generateTransformWithUrl(
                     project, post, stage, execution.getVerifiedUrl(),
@@ -451,33 +507,97 @@ public class PipelineExecutionController {
                 transformCache.put(stage.getCacheKey(), transform);
                 Platform.runLater(() -> {
                     transformPreviewArea.setText(transform);
-                    doPublish(stage, transform);
+                    appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Transform generated, starting publish...");
+                    doPublish(stage, transform, platformName);
                 });
             }).exceptionally(ex -> {
                 Platform.runLater(() -> {
+                    stopOperationTimer("Transform failed");
                     execution.setStageResult(stage.getId(),
                             PipelineExecution.StageResult.failed("Transform failed: " + ex.getMessage()));
                     saveExecution();
                     updateStageStatuses();
                     updateStatus("Transform failed: " + ex.getMessage());
+
+                    ErrorDialog.showDetailed("Transform Failed",
+                            "Failed to generate content transform for " + platformName + ".",
+                            ex.getMessage());
                 });
                 return null;
             });
         } else {
-            doPublish(stage, cachedTransform);
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Using cached transform, starting publish...");
+            doPublish(stage, cachedTransform, platformName);
         }
     }
 
-    private void doPublish(PipelineStage stage, String transform) {
+    private void doPublish(PipelineStage stage, String transform, String platformName) {
         executionService.executeSocialPublish(
                 project, post, execution, stage, transform,
                 status -> Platform.runLater(() -> updateStatus(status))
         ).thenAccept(result -> {
             Platform.runLater(() -> {
+                String resultText = result.getStatus() == PipelineStageStatus.COMPLETED ?
+                        "Published to " + platformName : platformName + " publish " + result.getStatus().name().toLowerCase();
+                stopOperationTimer(resultText);
+
                 execution.setStageResult(stage.getId(), result);
                 saveExecution();
                 updateStageStatuses();
+
+                if (result.getStatus() == PipelineStageStatus.FAILED) {
+                    ErrorDialog.showDetailed("Publish Failed",
+                            "Failed to publish to " + platformName + ".",
+                            result.getMessage());
+                } else if (result.getPublishedUrl() != null) {
+                    updateStatus("Published: " + result.getPublishedUrl());
+                }
             });
+        }).exceptionally(ex -> {
+            Platform.runLater(() -> {
+                stopOperationTimer("Publish error");
+                ErrorDialog.showDetailed("Publish Error",
+                        "An error occurred while publishing to " + platformName + ".",
+                        ex.getMessage());
+            });
+            return null;
+        });
+    }
+
+    private void executeDevToPublish(PipelineStage stage) {
+        Platform.runLater(() -> startOperationTimer("Dev.to Publish"));
+        updateStatus("Publishing to Dev.to...");
+
+        executionService.executeDevToPublish(
+                project, post, execution, stage,
+                status -> Platform.runLater(() -> updateStatus(status))
+        ).thenAccept(result -> {
+            Platform.runLater(() -> {
+                String resultText = result.getStatus() == PipelineStageStatus.COMPLETED ?
+                        "Published to Dev.to" : "Dev.to publish " + result.getStatus().name().toLowerCase();
+                stopOperationTimer(resultText);
+
+                execution.setStageResult(stage.getId(), result);
+                saveExecution();
+                updateStageStatuses();
+
+                if (result.getStatus() == PipelineStageStatus.COMPLETED) {
+                    updateStatus("Published to Dev.to: " + result.getPublishedUrl());
+                } else {
+                    updateStatus("Dev.to publish failed: " + result.getMessage());
+                    ErrorDialog.showDetailed("Dev.to Publish Failed",
+                            "Failed to publish article to Dev.to.",
+                            result.getMessage());
+                }
+            });
+        }).exceptionally(ex -> {
+            Platform.runLater(() -> {
+                stopOperationTimer("Dev.to publish error");
+                ErrorDialog.showDetailed("Dev.to Publish Error",
+                        "An error occurred while publishing to Dev.to.",
+                        ex.getMessage());
+            });
+            return null;
         });
     }
 
@@ -497,7 +617,9 @@ public class PipelineExecutionController {
         // Load existing transform if available
         Map<String, PlatformTransform> transforms =
                 PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
-        String platform = stage.getType() == PipelineStageType.LINKEDIN ? "linkedin" : "twitter";
+        // Get platform from profile
+        PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
+        String platform = profile != null ? profile.getPlatform() : "unknown";
         PlatformTransform existing = transforms.get(platform);
 
         if (existing != null && existing.getText() != null) {
@@ -516,6 +638,12 @@ public class PipelineExecutionController {
             return;
         }
 
+        PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
+        String platformName = profile != null ?
+                ape.marketingdepartment.service.getlate.GetLateService.getPlatformDisplayName(profile.getPlatform()) :
+                "Social";
+
+        startOperationTimer("Generating " + platformName + " Transform");
         updateStatus("Regenerating transform...");
         transformPreviewArea.setText("Generating...");
 
@@ -525,13 +653,18 @@ public class PipelineExecutionController {
         ).thenAccept(transform -> {
             transformCache.put(stage.getCacheKey(), transform);
             Platform.runLater(() -> {
+                stopOperationTimer("Transform generated");
                 transformPreviewArea.setText(transform);
                 updateStatus("Transform regenerated");
             });
         }).exceptionally(ex -> {
             Platform.runLater(() -> {
+                stopOperationTimer("Transform failed");
                 transformPreviewArea.setText("Generation failed: " + ex.getMessage());
                 updateStatus("Generation failed: " + ex.getMessage());
+                ErrorDialog.showDetailed("Transform Generation Failed",
+                        "Failed to generate content transform for " + platformName + ".",
+                        ex.getMessage());
             });
             return null;
         });
@@ -582,5 +715,104 @@ public class PipelineExecutionController {
 
     private void updateStatus(String status) {
         statusLabel.setText(status);
+    }
+
+    /**
+     * Handle new log entries from the publishing logger.
+     */
+    private void onLogEntry(PublishingLogger.LogEntry entry) {
+        Platform.runLater(() -> {
+            String formattedEntry = formatLogEntry(entry);
+            appendLog(formattedEntry);
+        });
+    }
+
+    /**
+     * Format a log entry for display.
+     */
+    private String formatLogEntry(PublishingLogger.LogEntry entry) {
+        String prefix = switch (entry.level()) {
+            case INFO -> "INFO ";
+            case REQUEST -> ">>> ";
+            case RESPONSE -> "<<< ";
+            case ERROR -> "ERROR";
+            case WARN -> "WARN ";
+        };
+        return "[" + entry.getFormattedTime() + "] " + prefix + " " + entry.message();
+    }
+
+    /**
+     * Append text to the log area.
+     */
+    private void appendLog(String text) {
+        if (logArea != null) {
+            if (!logArea.getText().isEmpty()) {
+                logArea.appendText("\n");
+            }
+            logArea.appendText(text);
+            // Auto-scroll to bottom
+            logArea.setScrollTop(Double.MAX_VALUE);
+        }
+    }
+
+    @FXML
+    private void onClearLog() {
+        if (logArea != null) {
+            logArea.clear();
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Log cleared");
+        }
+    }
+
+    /**
+     * Start the operation timer.
+     */
+    private void startOperationTimer(String operationName) {
+        operationStartTime = System.currentTimeMillis();
+
+        // Show progress indicator
+        if (progressIndicator != null) {
+            progressIndicator.setVisible(true);
+        }
+
+        // Update timer label every 100ms
+        if (operationTimer != null) {
+            operationTimer.stop();
+        }
+        operationTimer = new Timeline(new KeyFrame(Duration.millis(100), e -> {
+            long elapsedMs = System.currentTimeMillis() - operationStartTime;
+            long seconds = elapsedMs / 1000;
+            long millis = (elapsedMs % 1000) / 100;
+            String timerText = String.format("%s: %d.%ds", operationName, seconds, millis);
+            if (timerLabel != null) {
+                timerLabel.setText(timerText);
+            }
+        }));
+        operationTimer.setCycleCount(Animation.INDEFINITE);
+        operationTimer.play();
+
+        appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Started: " + operationName);
+    }
+
+    /**
+     * Stop the operation timer.
+     */
+    private void stopOperationTimer(String result) {
+        if (operationTimer != null) {
+            operationTimer.stop();
+            operationTimer = null;
+        }
+
+        long elapsedMs = System.currentTimeMillis() - operationStartTime;
+        String timerText = String.format("Completed in %.1fs", elapsedMs / 1000.0);
+        if (timerLabel != null) {
+            timerLabel.setText(timerText);
+        }
+
+        // Hide progress indicator
+        if (progressIndicator != null) {
+            progressIndicator.setVisible(false);
+        }
+
+        appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] " + result + " (" + timerText + ")");
     }
 }

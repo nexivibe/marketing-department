@@ -12,14 +12,6 @@ module ape.marketingdepartment {
     requires flexmark.util.ast;
     requires flexmark.util.data;
 
-    // Selenium WebDriver
-    requires org.seleniumhq.selenium.api;
-    requires org.seleniumhq.selenium.chrome_driver;
-    requires org.seleniumhq.selenium.support;
-    requires org.seleniumhq.selenium.remote_driver;
-    requires org.seleniumhq.selenium.http;
-    requires io.github.bonigarcia.webdrivermanager;
-
     opens ape.marketingdepartment to javafx.fxml;
     opens ape.marketingdepartment.controller to javafx.fxml;
 
@@ -28,6 +20,6 @@ module ape.marketingdepartment {
     exports ape.marketingdepartment.controller;
     exports ape.marketingdepartment.service;
     exports ape.marketingdepartment.service.ai;
-    exports ape.marketingdepartment.service.browser;
-    exports ape.marketingdepartment.service.publishing;
+    exports ape.marketingdepartment.service.getlate;
+    exports ape.marketingdepartment.service.devto;
 }

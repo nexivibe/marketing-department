@@ -15,14 +15,14 @@ public enum PipelineStageType {
     URL_VERIFY,
 
     /**
-     * Publish to LinkedIn.
+     * Publish via GetLate API to any supported social platform.
      */
-    LINKEDIN,
+    GETLATE,
 
     /**
-     * Publish to X/Twitter.
+     * Publish as an article on Dev.to.
      */
-    TWITTER;
+    DEV_TO;
 
     /**
      * Check if this stage is a gatekeeper stage.
@@ -36,12 +36,30 @@ public enum PipelineStageType {
      * Check if this stage is a social publishing stage.
      */
     public boolean isSocialStage() {
-        return this == LINKEDIN || this == TWITTER;
+        return this == GETLATE;
+    }
+
+    /**
+     * Check if this stage is a blog publishing stage (like Dev.to).
+     */
+    public boolean isBlogStage() {
+        return this == DEV_TO;
+    }
+
+    /**
+     * Check if this stage requires content transformation.
+     */
+    public boolean requiresTransform() {
+        return this == GETLATE || this == DEV_TO;
     }
 
     public static PipelineStageType fromString(String value) {
         if (value == null || value.isBlank()) {
             return null;
+        }
+        // Handle legacy values
+        if ("LINKEDIN".equalsIgnoreCase(value) || "TWITTER".equalsIgnoreCase(value)) {
+            return GETLATE;
         }
         try {
             return valueOf(value.toUpperCase());
@@ -54,8 +72,8 @@ public enum PipelineStageType {
         return switch (this) {
             case WEB_EXPORT -> "Web Export";
             case URL_VERIFY -> "URL Liveness Check";
-            case LINKEDIN -> "LinkedIn";
-            case TWITTER -> "X/Twitter";
+            case GETLATE -> "Social Post (GetLate)";
+            case DEV_TO -> "Dev.to Article";
         };
     }
 }

@@ -31,8 +31,21 @@
                     <MenuItem text="Web Export" onAction="#onAddWebExport"/>
                     <MenuItem text="URL Verify" onAction="#onAddUrlVerify"/>
                     <SeparatorMenuItem/>
-                    <MenuItem text="LinkedIn Stage" onAction="#onAddLinkedIn"/>
-                    <MenuItem text="Twitter/X Stage" onAction="#onAddTwitter"/>
+                    <Menu text="Social Post (GetLate)">
+                        <items>
+                            <MenuItem text="Any Profile..." onAction="#onAddGetLate"/>
+                            <SeparatorMenuItem/>
+                            <MenuItem text="X/Twitter" onAction="#onAddTwitter"/>
+                            <MenuItem text="LinkedIn" onAction="#onAddLinkedIn"/>
+                            <MenuItem text="Bluesky" onAction="#onAddBluesky"/>
+                            <MenuItem text="Threads" onAction="#onAddThreads"/>
+                            <MenuItem text="Facebook" onAction="#onAddFacebook"/>
+                            <MenuItem text="Instagram" onAction="#onAddInstagram"/>
+                            <MenuItem text="Reddit" onAction="#onAddReddit"/>
+                        </items>
+                    </Menu>
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Dev.to Article" onAction="#onAddDevTo"/>
                 </items>
             </MenuButton>
         </HBox>
@@ -58,6 +71,8 @@
             <Button text="Manage Profiles" onAction="#onManageProfiles"/>
         </HBox>
         <Label fx:id="profilesCountLabel" text="0 profiles configured" style="-fx-text-fill: #666;"/>
+        <Label text="GetLate profiles: Settings > GetLate Accounts | Dev.to: Add 'devto' API key in Settings"
+               style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
     </VBox>
 
     <Separator/>

@@ -1,32 +1,23 @@
 package ape.marketingdepartment.model.pipeline;
 
 /**
- * Authentication method for publishing profiles.
+ * Authentication method for publishing.
+ * Currently only API_KEY is used (via GetLate).
  */
 public enum AuthMethod {
     /**
-     * User manually opens browser and logs in.
+     * API key based authentication (GetLate).
      */
-    MANUAL_BROWSER,
-
-    /**
-     * API key based authentication.
-     */
-    API_KEY,
-
-    /**
-     * OAuth based authentication (future).
-     */
-    OAUTH;
+    API_KEY;
 
     public static AuthMethod fromString(String value) {
         if (value == null || value.isBlank()) {
-            return MANUAL_BROWSER;
+            return API_KEY;
         }
         try {
             return valueOf(value.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return MANUAL_BROWSER;
+            return API_KEY;
         }
     }
 }

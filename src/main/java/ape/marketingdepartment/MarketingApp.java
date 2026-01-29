@@ -3,7 +3,6 @@ package ape.marketingdepartment;
 import ape.marketingdepartment.controller.MetaEditorPopupController;
 import ape.marketingdepartment.controller.PipelineExecutionController;
 import ape.marketingdepartment.controller.ProjectController;
-import ape.marketingdepartment.controller.PublishingDialogController;
 import ape.marketingdepartment.controller.SettingsController;
 import ape.marketingdepartment.controller.StartupController;
 import ape.marketingdepartment.controller.TagEditorPopupController;
@@ -87,22 +86,6 @@ public class MarketingApp extends Application {
 
         SettingsController controller = loader.getController();
         controller.initialize(settings, dialogStage);
-
-        dialogStage.showAndWait();
-    }
-
-    public void showPublishingDialog(Project project, Post post, String platform) throws IOException {
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("publishing-dialog.fxml"));
-        Parent root = loader.load();
-
-        Stage dialogStage = new Stage();
-        dialogStage.initModality(Modality.WINDOW_MODAL);
-        dialogStage.initOwner(primaryStage);
-        dialogStage.setScene(new Scene(root));
-        dialogStage.setResizable(true);
-
-        PublishingDialogController controller = loader.getController();
-        controller.initialize(dialogStage, settings, project, post, platform);
 
         dialogStage.showAndWait();
     }

@@ -7,7 +7,7 @@
 <VBox xmlns="http://javafx.com/javafx/17"
       xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="ape.marketingdepartment.controller.SettingsController"
-      spacing="15" prefWidth="550" prefHeight="500">
+      spacing="15" prefWidth="600" prefHeight="550">
     <padding>
         <Insets bottom="15" left="15" right="15" top="15"/>
     </padding>
@@ -19,7 +19,7 @@
                     <Insets bottom="10" left="10" right="10" top="10"/>
                 </padding>
 
-                <Label text="Configure API keys for AI services:" style="-fx-font-size: 12px;"/>
+                <Label text="Configure API keys for AI and publishing services:" style="-fx-font-size: 12px;"/>
 
                 <ListView fx:id="apiKeysList" prefHeight="100"/>
 
@@ -47,69 +47,45 @@
 
                 <Separator/>
 
-                <Label text="Get your Grok API key from: https://console.x.ai"
-                       style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+                <VBox spacing="3">
+                    <Label text="API Key Sources:" style="-fx-font-size: 11px; -fx-font-weight: bold;"/>
+                    <Label text="Grok (AI): https://console.x.ai" style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+                    <Label text="GetLate (Social): https://getlate.dev" style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+                </VBox>
             </VBox>
         </Tab>
 
-        <Tab text="Publishing Profiles" closable="false">
+        <Tab text="GetLate Accounts" closable="false">
             <VBox spacing="10">
                 <padding>
                     <Insets bottom="10" left="10" right="10" top="10"/>
                 </padding>
 
-                <Label text="Browser-based publishing profiles:" style="-fx-font-size: 12px;"/>
+                <Label text="Connected social accounts from GetLate:" style="-fx-font-size: 12px;"/>
 
-                <ListView fx:id="profilesList" prefHeight="150" VBox.vgrow="ALWAYS"/>
+                <ListView fx:id="getLateAccountsList" prefHeight="120"/>
+
+                <HBox spacing="10">
+                    <Button text="Refresh Accounts" onAction="#onRefreshAccounts" fx:id="refreshAccountsButton"/>
+                    <Button text="Create Profile from Selected" onAction="#onCreateProfileFromAccount"/>
+                </HBox>
+
+                <Label fx:id="accountsStatusLabel" text="" wrapText="true"
+                       style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+
+                <Separator/>
+
+                <Label text="Publishing Profiles:" style="-fx-font-size: 12px; -fx-font-weight: bold;"/>
+
+                <ListView fx:id="profilesList" prefHeight="120" VBox.vgrow="ALWAYS"/>
 
                 <HBox spacing="10">
                     <Button text="Add Profile" onAction="#onAddProfile"/>
                     <Button text="Edit" onAction="#onEditProfile"/>
-                    <Button text="Login" onAction="#onLoginProfile"/>
                     <Button text="Remove" onAction="#onRemoveProfile"/>
                 </HBox>
 
-                <Separator/>
-
-                <Label text="* Login opens Chrome - log in manually, then close browser. Session persists."
-                       style="-fx-font-size: 11px; -fx-text-fill: #666;" wrapText="true"/>
-            </VBox>
-        </Tab>
-
-        <Tab text="Browser Settings" closable="false">
-            <VBox spacing="10">
-                <padding>
-                    <Insets bottom="10" left="10" right="10" top="10"/>
-                </padding>
-
-                <Label fx:id="osLabel" text="Detected OS: " style="-fx-font-size: 12px; -fx-font-weight: bold;"/>
-
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Chrome Path:" prefWidth="100"/>
-                    <TextField fx:id="chromePathField" HBox.hgrow="ALWAYS"/>
-                    <Button text="Browse..." onAction="#onBrowseChrome"/>
-                    <Button text="Test" onAction="#onTestChrome"/>
-                </HBox>
-
-                <Separator/>
-
-                <Label text="Auto-detect Chrome installations:" style="-fx-font-size: 12px;"/>
-
-                <ListView fx:id="detectedChromeList" prefHeight="100"/>
-
-                <HBox spacing="10">
-                    <Button text="Infer" onAction="#onInferChrome" style="-fx-font-weight: bold;"/>
-                    <Label text="Double-click a path to use it" style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
-                </HBox>
-
-                <Separator/>
-
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Options:" prefWidth="100"/>
-                    <CheckBox fx:id="headlessCheckbox" text="Run headless (no visible browser window)"/>
-                </HBox>
-
-                <Label text="Note: Headless mode may not work for all platforms due to bot detection."
+                <Label text="* Profiles are used in pipelines for social publishing. Each profile links to a GetLate account."
                        style="-fx-font-size: 11px; -fx-text-fill: #666;" wrapText="true"/>
             </VBox>
         </Tab>

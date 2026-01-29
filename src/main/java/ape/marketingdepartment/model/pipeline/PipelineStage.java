@@ -10,23 +10,19 @@ import java.util.UUID;
  * Configuration for a single stage in the publishing pipeline.
  */
 public class PipelineStage {
-    private static final String DEFAULT_LINKEDIN_PROMPT =
-            "Transform this blog post into a professional LinkedIn post. " +
-            "Keep it engaging and insightful. Use appropriate line breaks for readability. " +
-            "Include 3-5 relevant hashtags at the end. Keep the tone professional but personable.";
-
-    private static final String DEFAULT_TWITTER_PROMPT =
-            "Transform this blog post into a compelling tweet or thread. " +
-            "If the content is substantial, create a thread with numbered tweets. " +
-            "Keep each tweet under 280 characters. Make it punchy and engaging. " +
-            "Include 2-3 relevant hashtags.";
+    private static final String DEFAULT_SOCIAL_PROMPT =
+            "Transform this blog post into a compelling social media post. " +
+            "Keep it engaging and appropriate for the platform. " +
+            "Use line breaks for readability. Include 2-4 relevant hashtags. " +
+            "Keep the tone professional but personable.";
 
     private String id;
     private PipelineStageType type;
-    private String profileId; // For social stages, references a PublishingProfile
+    private String profileId;      // For social stages, references a PublishingProfile
+    private String platformHint;   // Platform name hint for display (twitter, linkedin, etc.)
     private int order;
     private boolean enabled;
-    private String prompt; // Custom prompt for social stages
+    private String prompt;         // Custom prompt for social stages
     private Map<String, String> stageSettings;
 
     public PipelineStage() {
@@ -41,14 +37,14 @@ public class PipelineStage {
         this.order = order;
         // Set default prompt for social stages
         if (type != null && type.isSocialStage()) {
-            this.prompt = getDefaultPrompt(type);
+            this.prompt = DEFAULT_SOCIAL_PROMPT;
         }
     }
 
     public PipelineStage(PipelineStageType type, String profileId, int order) {
         this(type, order);
         this.profileId = profileId;
-        // Generate deterministic ID for social stages based on platform + profile
+        // Generate deterministic ID for social stages based on type + profile
         if (type != null && type.isSocialStage() && profileId != null) {
             this.id = generateCacheKey(type, profileId);
         }
@@ -73,13 +69,46 @@ public class PipelineStage {
     }
 
     /**
-     * Get the default prompt for a social stage type.
+     * Get the default prompt for a platform.
      */
-    public static String getDefaultPrompt(PipelineStageType type) {
-        return switch (type) {
-            case LINKEDIN -> DEFAULT_LINKEDIN_PROMPT;
-            case TWITTER -> DEFAULT_TWITTER_PROMPT;
-            default -> "";
+    public static String getDefaultPromptForPlatform(String platform) {
+        if (platform == null) {
+            return DEFAULT_SOCIAL_PROMPT;
+        }
+        return switch (platform.toLowerCase()) {
+            case "linkedin" -> "Transform this blog post into a professional LinkedIn post. " +
+                    "Keep it engaging and insightful. Use appropriate line breaks for readability. " +
+                    "Include 3-5 relevant hashtags at the end. Keep the tone professional but personable.";
+            case "twitter" -> "Transform this blog post into a compelling tweet or thread. " +
+                    "If the content is substantial, create a thread with numbered tweets. " +
+                    "Keep each tweet under 280 characters. Make it punchy and engaging. " +
+                    "Include 2-3 relevant hashtags.";
+            case "instagram" -> "Transform this blog post into an engaging Instagram caption. " +
+                    "Start with a hook. Use line breaks for readability. " +
+                    "Include 5-10 relevant hashtags at the end. Keep it visual and inspiring.";
+            case "facebook" -> "Transform this blog post into a Facebook post. " +
+                    "Keep it conversational and engaging. Use emojis sparingly. " +
+                    "Include a call to action. Add 2-3 relevant hashtags.";
+            case "threads" -> "Transform this blog post into a Threads post. " +
+                    "Keep it concise and conversational. " +
+                    "Include 2-3 relevant hashtags.";
+            case "bluesky" -> "Transform this blog post into a Bluesky post. " +
+                    "Keep it under 300 characters if possible, or create a thread. " +
+                    "Keep it engaging and authentic.";
+            case "devto", "dev.to" -> """
+                    Transform this blog post for publication on Dev.to, a developer community platform.
+
+                    Guidelines:
+                    - Keep the technical accuracy and depth
+                    - Use code blocks with language identifiers (```java, ```python, etc.)
+                    - Add a brief, engaging introduction that hooks developers
+                    - Structure with clear headings (## and ###)
+                    - Include practical examples where relevant
+                    - End with a conclusion or call-to-action
+                    - Keep the tone professional but conversational
+                    - Do not add front matter - just return the markdown content
+                    """;
+            default -> DEFAULT_SOCIAL_PROMPT;
         };
     }
 
@@ -108,6 +137,14 @@ public class PipelineStage {
         this.profileId = profileId;
     }
 
+    public String getPlatformHint() {
+        return platformHint;
+    }
+
+    public void setPlatformHint(String platformHint) {
+        this.platformHint = platformHint;
+    }
+
     public int getOrder() {
         return order;
     }
@@ -133,14 +170,14 @@ public class PipelineStage {
     }
 
     /**
-     * Get the effective prompt for this stage, falling back to default if not set.
+     * Get the effective prompt for this stage, falling back to platform default if not set.
      */
     public String getEffectivePrompt() {
         if (prompt != null && !prompt.isBlank()) {
             return prompt;
         }
         if (type != null && type.isSocialStage()) {
-            return getDefaultPrompt(type);
+            return getDefaultPromptForPlatform(platformHint);
         }
         return "";
     }
@@ -187,6 +224,11 @@ public class PipelineStage {
             stage.profileId = profileId;
         }
 
+        String platformHint = JsonHelper.extractStringField(json, "platformHint");
+        if (platformHint != null) {
+            stage.platformHint = platformHint;
+        }
+
         String orderStr = JsonHelper.extractStringField(json, "order");
         if (orderStr != null) {
             try {
@@ -207,7 +249,6 @@ public class PipelineStage {
         // Parse stageSettings object
         String settingsJson = JsonHelper.extractObjectField(json, "stageSettings");
         if (settingsJson != null) {
-            // Simple key-value extraction for common settings
             String includeUrl = JsonHelper.extractStringField(settingsJson, "includeUrl");
             if (includeUrl != null) stage.stageSettings.put("includeUrl", includeUrl);
 
@@ -229,6 +270,10 @@ public class PipelineStage {
 
         if (profileId != null) {
             sb.append("      \"profileId\": ").append(JsonHelper.toJsonString(profileId)).append(",\n");
+        }
+
+        if (platformHint != null) {
+            sb.append("      \"platformHint\": ").append(JsonHelper.toJsonString(platformHint)).append(",\n");
         }
 
         sb.append("      \"order\": ").append(order).append(",\n");
@@ -257,8 +302,10 @@ public class PipelineStage {
     @Override
     public String toString() {
         String name = type != null ? type.getDisplayName() : "Unknown";
-        if (profileId != null) {
-            name += " (Profile: " + profileId + ")";
+        if (platformHint != null) {
+            name += " (" + platformHint + ")";
+        } else if (profileId != null) {
+            name += " (Profile: " + profileId.substring(0, Math.min(8, profileId.length())) + ")";
         }
         return name;
     }

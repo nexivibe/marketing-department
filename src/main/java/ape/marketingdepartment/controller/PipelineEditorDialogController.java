@@ -2,9 +2,9 @@ package ape.marketingdepartment.controller;
 
 import ape.marketingdepartment.model.*;
 import ape.marketingdepartment.model.pipeline.*;
+import ape.marketingdepartment.service.getlate.GetLateService;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.IOException;
@@ -81,7 +81,7 @@ public class PipelineEditorDialogController {
             PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
             if (profile != null) {
                 sb.append(" - ").append(profile.getName());
-                sb.append(" [").append(getAuthMethodLabel(profile.getAuthMethod())).append("]");
+                sb.append(" [").append(GetLateService.getPlatformDisplayName(profile.getPlatform())).append("]");
             } else {
                 sb.append(" - (Profile not found)");
             }
@@ -97,17 +97,6 @@ public class PipelineEditorDialogController {
         }
 
         return sb.toString();
-    }
-
-    private String getAuthMethodLabel(ape.marketingdepartment.model.pipeline.AuthMethod authMethod) {
-        if (authMethod == null) {
-            return "Browser";
-        }
-        return switch (authMethod) {
-            case MANUAL_BROWSER -> "Browser";
-            case API_KEY -> "API";
-            case OAUTH -> "OAuth";
-        };
     }
 
     private void refreshStagesList() {
@@ -146,12 +135,47 @@ public class PipelineEditorDialogController {
 
     @FXML
     private void onAddLinkedIn() {
-        addSocialStage(PipelineStageType.LINKEDIN, "linkedin");
+        addGetLateStage("linkedin");
     }
 
     @FXML
     private void onAddTwitter() {
-        addSocialStage(PipelineStageType.TWITTER, "twitter");
+        addGetLateStage("twitter");
+    }
+
+    @FXML
+    private void onAddBluesky() {
+        addGetLateStage("bluesky");
+    }
+
+    @FXML
+    private void onAddThreads() {
+        addGetLateStage("threads");
+    }
+
+    @FXML
+    private void onAddFacebook() {
+        addGetLateStage("facebook");
+    }
+
+    @FXML
+    private void onAddInstagram() {
+        addGetLateStage("instagram");
+    }
+
+    @FXML
+    private void onAddReddit() {
+        addGetLateStage("reddit");
+    }
+
+    @FXML
+    private void onAddGetLate() {
+        addGetLateStage(null);
+    }
+
+    @FXML
+    private void onAddDevTo() {
+        addDevToStage();
     }
 
     private void addStage(PipelineStageType type, String profileId) {
@@ -164,14 +188,23 @@ public class PipelineEditorDialogController {
         statusLabel.setText("Added " + type.getDisplayName() + " stage");
     }
 
-    private void addSocialStage(PipelineStageType type, String platform) {
-        List<PublishingProfile> profiles = appSettings.getProfilesForPlatform(platform);
+    private void addGetLateStage(String platformFilter) {
+        List<PublishingProfile> profiles;
+        if (platformFilter != null) {
+            profiles = appSettings.getProfilesForPlatform(platformFilter);
+        } else {
+            profiles = appSettings.getPublishingProfiles();
+        }
 
         if (profiles.isEmpty()) {
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("No Profiles");
-            alert.setHeaderText("No " + platform + " profiles configured");
-            alert.setContentText("Please add a publishing profile first via 'Manage Profiles'.");
+            if (platformFilter != null) {
+                alert.setHeaderText("No " + platformFilter + " profiles configured");
+            } else {
+                alert.setHeaderText("No publishing profiles configured");
+            }
+            alert.setContentText("Please add a publishing profile first via Settings > GetLate Accounts.");
             alert.showAndWait();
             return;
         }
@@ -179,17 +212,44 @@ public class PipelineEditorDialogController {
         // Let user select profile
         ChoiceDialog<PublishingProfile> dialog = new ChoiceDialog<>(profiles.getFirst(), profiles);
         dialog.setTitle("Select Profile");
-        dialog.setHeaderText("Select " + platform + " profile for this stage");
+        dialog.setHeaderText("Select profile for this stage");
         dialog.setContentText("Profile:");
 
         Optional<PublishingProfile> result = dialog.showAndWait();
         result.ifPresent(profile -> {
-            PipelineStage stage = new PipelineStage(type, profile.getId(), pipeline.getStages().size());
+            PipelineStage stage = new PipelineStage(PipelineStageType.GETLATE, profile.getId(), pipeline.getStages().size());
+            stage.setPlatformHint(profile.getPlatform());
             stage.setStageSetting("includeUrl", String.valueOf(profile.includesUrl()));
+            // Set platform-specific default prompt
+            stage.setPrompt(PipelineStage.getDefaultPromptForPlatform(profile.getPlatform()));
             pipeline.addStage(stage);
             refreshStagesList();
-            statusLabel.setText("Added " + type.getDisplayName() + " stage with " + profile.getName());
+            statusLabel.setText("Added GetLate stage with " + profile.getName());
         });
+    }
+
+    private void addDevToStage() {
+        // Check if Dev.to API key is configured
+        if (appSettings.getApiKeyForService("devto") == null) {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("API Key Required");
+            alert.setHeaderText("Dev.to API key not configured");
+            alert.setContentText("Please add a 'devto' API key in Settings > API Keys.\n\n" +
+                    "You can get your API key from:\nhttps://dev.to/settings/extensions");
+            alert.showAndWait();
+            return;
+        }
+
+        PipelineStage stage = new PipelineStage(PipelineStageType.DEV_TO, pipeline.getStages().size());
+        stage.setPlatformHint("devto");
+        stage.setPrompt(PipelineStage.getDefaultPromptForPlatform("devto"));
+        // By default, publish to Dev.to
+        stage.setStageSetting("published", "true");
+        // Include canonical URL to the web export
+        stage.setStageSetting("includeCanonical", "true");
+        pipeline.addStage(stage);
+        refreshStagesList();
+        statusLabel.setText("Added Dev.to Article stage");
     }
 
     @FXML
@@ -294,7 +354,7 @@ public class PipelineEditorDialogController {
 
         // Reset to default button
         Button resetButton = new Button("Reset to Default");
-        resetButton.setOnAction(e -> promptArea.setText(PipelineStage.getDefaultPrompt(stage.getType())));
+        resetButton.setOnAction(e -> promptArea.setText(PipelineStage.getDefaultPromptForPlatform(stage.getPlatformHint())));
         content.getChildren().add(resetButton);
 
         dialog.getDialogPane().setContent(content);
@@ -345,31 +405,17 @@ public class PipelineEditorDialogController {
 
     @FXML
     private void onManageProfiles() {
-        try {
-            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
-                    getClass().getResource("/ape/marketingdepartment/profile-editor-dialog.fxml")
-            );
-            javafx.scene.Parent root = loader.load();
-
-            Stage editorStage = new Stage();
-            editorStage.initModality(Modality.WINDOW_MODAL);
-            editorStage.initOwner(dialogStage);
-            editorStage.setScene(new javafx.scene.Scene(root));
-
-            ProfileEditorDialogController controller = loader.getController();
-            controller.initialize(editorStage, appSettings);
-
-            editorStage.showAndWait();
-
-            // Refresh UI
-            updateProfilesCount();
-            refreshStagesList();
-
-        } catch (IOException e) {
-            ErrorDialog.showDetailed("Failed to Open Profile Editor",
-                    "Could not open the profile editor dialog.",
-                    e.getMessage());
-        }
+        // Direct user to Settings for profile management
+        Alert info = new Alert(Alert.AlertType.INFORMATION);
+        info.setTitle("Profile Management");
+        info.setHeaderText("Manage Profiles via Settings");
+        info.setContentText("Publishing profiles are now managed in the main Settings dialog.\n\n" +
+                "Go to: File > Settings > GetLate Accounts\n\n" +
+                "There you can:\n" +
+                "- Add your GetLate API key\n" +
+                "- Refresh connected accounts\n" +
+                "- Create publishing profiles");
+        info.showAndWait();
     }
 
     @FXML

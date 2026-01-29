@@ -53,6 +53,22 @@
 
     <Separator/>
 
+    <!-- Publishing Log Section -->
+    <VBox spacing="5" VBox.vgrow="SOMETIMES" prefHeight="150">
+        <HBox alignment="CENTER_LEFT" spacing="10">
+            <Label text="Publishing Log:" style="-fx-font-weight: bold;"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="timerLabel" text="" style="-fx-font-family: monospace; -fx-font-size: 12px; -fx-text-fill: #666;"/>
+            <ProgressIndicator fx:id="progressIndicator" prefWidth="20" prefHeight="20" visible="false"/>
+            <Button fx:id="clearLogButton" text="Clear" onAction="#onClearLog" style="-fx-font-size: 11px;"/>
+        </HBox>
+        <TextArea fx:id="logArea" wrapText="true" editable="false" VBox.vgrow="ALWAYS"
+                  style="-fx-font-family: 'Consolas', 'Monaco', monospace; -fx-font-size: 11px;"
+                  promptText="Publishing activity will be logged here..."/>
+    </VBox>
+
+    <Separator/>
+
     <!-- Status and Actions -->
     <HBox spacing="10" alignment="CENTER_LEFT">
         <Label fx:id="statusLabel" text="" style="-fx-font-size: 11px;" HBox.hgrow="ALWAYS"/>

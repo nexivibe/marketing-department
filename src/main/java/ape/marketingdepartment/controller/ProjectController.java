@@ -319,9 +319,8 @@ public class ProjectController {
     }
 
     private void updateTransformButtons(Post post) {
-        // Transform buttons shown for REVIEW and FINISHED posts
-        boolean showTransform = post != null &&
-                (post.getStatus() == PostStatus.REVIEW || post.getStatus() == PostStatus.FINISHED);
+        // Transform buttons shown only for REVIEW posts (not FINISHED)
+        boolean showTransform = post != null && post.getStatus() == PostStatus.REVIEW;
         transformButtonsBox.setVisible(showTransform);
         transformButtonsBox.setManaged(showTransform);
     }
