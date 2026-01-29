@@ -5,8 +5,6 @@ import ape.marketingdepartment.service.JsonHelper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
 
 public class ProjectSettings {
     private static final String SETTINGS_FILE = ".project-settings.json";
@@ -15,30 +13,30 @@ public class ProjectSettings {
     private String reviewerPrompt;
     private String rewritePrompt;
     private String defaultAuthor;
-    private Map<String, String> platformPrompts;
 
     // Web Publishing Settings
     private String urlBase;
     private String postTemplate;
     private String webExportDirectory;
+    private String tagIndexUrl;  // Full URL to tag index page (tags link to tagIndexUrl#tagname)
     private String tagSuggestionPrompt;
     private String uriSuggestionPrompt;
+    private String descriptionSuggestionPrompt;
 
     public ProjectSettings() {
         this.selectedAgent = "grok";
         this.reviewerPrompt = "You are a marketing content reviewer. Review this post for grammar, clarity, and engagement. Provide specific, actionable feedback.";
         this.rewritePrompt = "You are a professional content editor. Rewrite this post to improve clarity, engagement, and flow while preserving the original meaning and key points. Keep the same markdown format with the title as the first # header. Make it compelling and well-structured.";
         this.defaultAuthor = "";
-        this.platformPrompts = new HashMap<>();
-        this.platformPrompts.put("linkedin", "Transform this content for LinkedIn. Keep it professional, use appropriate hashtags, and optimize for engagement.");
-        this.platformPrompts.put("twitter", "Transform this content for X/Twitter. Keep under 280 characters, make it punchy and engaging.");
 
         // Web Publishing defaults
         this.urlBase = "";
         this.postTemplate = "post-template.html";
         this.webExportDirectory = "./public";
+        this.tagIndexUrl = "";  // e.g., https://example.com/tags
         this.tagSuggestionPrompt = "Suggest 3-5 SEO-optimized tags for this blog post. Consider both search engine optimization and social media discoverability. Return only the tags as a comma-separated list, without hashtags or explanations.";
         this.uriSuggestionPrompt = "Suggest an SEO-friendly URL slug for this blog post. The slug should be lowercase, use hyphens between words, be concise (3-6 words), and include relevant keywords. Return only the slug without any explanation or the .html extension.";
+        this.descriptionSuggestionPrompt = "Write a compelling SEO meta description for this blog post. The description should be 150-160 characters, include the main keyword naturally, have a clear call-to-action or value proposition, and entice users to click. Return only the description text without quotes or explanations.";
     }
 
     public String getSelectedAgent() {
@@ -73,25 +71,18 @@ public class ProjectSettings {
         this.defaultAuthor = defaultAuthor;
     }
 
-    public Map<String, String> getPlatformPrompts() {
-        return platformPrompts;
-    }
-
-    public String getPlatformPrompt(String platform) {
-        return platformPrompts.getOrDefault(platform, "");
-    }
-
-    public void setPlatformPrompt(String platform, String prompt) {
-        platformPrompts.put(platform, prompt);
-    }
-
     // Web Publishing getters and setters
     public String getUrlBase() {
         return urlBase;
     }
 
     public void setUrlBase(String urlBase) {
-        this.urlBase = urlBase;
+        // Normalize: ensure URL base ends with /
+        if (urlBase != null && !urlBase.isEmpty() && !urlBase.endsWith("/")) {
+            this.urlBase = urlBase + "/";
+        } else {
+            this.urlBase = urlBase;
+        }
     }
 
     public String getPostTemplate() {
@@ -110,6 +101,14 @@ public class ProjectSettings {
         this.webExportDirectory = webExportDirectory;
     }
 
+    public String getTagIndexUrl() {
+        return tagIndexUrl;
+    }
+
+    public void setTagIndexUrl(String tagIndexUrl) {
+        this.tagIndexUrl = tagIndexUrl;
+    }
+
     public String getTagSuggestionPrompt() {
         return tagSuggestionPrompt;
     }
@@ -124,6 +123,14 @@ public class ProjectSettings {
 
     public void setUriSuggestionPrompt(String uriSuggestionPrompt) {
         this.uriSuggestionPrompt = uriSuggestionPrompt;
+    }
+
+    public String getDescriptionSuggestionPrompt() {
+        return descriptionSuggestionPrompt;
+    }
+
+    public void setDescriptionSuggestionPrompt(String descriptionSuggestionPrompt) {
+        this.descriptionSuggestionPrompt = descriptionSuggestionPrompt;
     }
 
     public static ProjectSettings load(Path projectPath) {
@@ -169,19 +176,6 @@ public class ProjectSettings {
             settings.defaultAuthor = defaultAuthor;
         }
 
-        // Parse platform prompts
-        String platformPromptsJson = JsonHelper.extractObjectField(json, "platformPrompts");
-        if (platformPromptsJson != null) {
-            String linkedinPrompt = JsonHelper.extractStringField(platformPromptsJson, "linkedin");
-            if (linkedinPrompt != null) {
-                settings.platformPrompts.put("linkedin", linkedinPrompt);
-            }
-            String twitterPrompt = JsonHelper.extractStringField(platformPromptsJson, "twitter");
-            if (twitterPrompt != null) {
-                settings.platformPrompts.put("twitter", twitterPrompt);
-            }
-        }
-
         // Parse web publishing settings
         String urlBase = JsonHelper.extractStringField(json, "urlBase");
         if (urlBase != null) {
@@ -198,6 +192,11 @@ public class ProjectSettings {
             settings.webExportDirectory = webExportDir;
         }
 
+        String tagIndexUrl = JsonHelper.extractStringField(json, "tagIndexUrl");
+        if (tagIndexUrl != null) {
+            settings.tagIndexUrl = tagIndexUrl;
+        }
+
         String tagPrompt = JsonHelper.extractStringField(json, "tagSuggestionPrompt");
         if (tagPrompt != null) {
             settings.tagSuggestionPrompt = tagPrompt;
@@ -206,6 +205,11 @@ public class ProjectSettings {
         String uriPrompt = JsonHelper.extractStringField(json, "uriSuggestionPrompt");
         if (uriPrompt != null) {
             settings.uriSuggestionPrompt = uriPrompt;
+        }
+
+        String descPrompt = JsonHelper.extractStringField(json, "descriptionSuggestionPrompt");
+        if (descPrompt != null) {
+            settings.descriptionSuggestionPrompt = descPrompt;
         }
 
         return settings;
@@ -218,24 +222,15 @@ public class ProjectSettings {
         sb.append("  \"reviewerPrompt\": ").append(JsonHelper.toJsonString(reviewerPrompt)).append(",\n");
         sb.append("  \"rewritePrompt\": ").append(JsonHelper.toJsonString(rewritePrompt)).append(",\n");
         sb.append("  \"defaultAuthor\": ").append(JsonHelper.toJsonString(defaultAuthor)).append(",\n");
-        sb.append("  \"platformPrompts\": {\n");
-
-        int i = 0;
-        for (Map.Entry<String, String> entry : platformPrompts.entrySet()) {
-            if (i > 0) sb.append(",\n");
-            sb.append("    ").append(JsonHelper.toJsonString(entry.getKey()))
-              .append(": ").append(JsonHelper.toJsonString(entry.getValue()));
-            i++;
-        }
-
-        sb.append("\n  },\n");
 
         // Web publishing settings
         sb.append("  \"urlBase\": ").append(JsonHelper.toJsonString(urlBase)).append(",\n");
         sb.append("  \"postTemplate\": ").append(JsonHelper.toJsonString(postTemplate)).append(",\n");
         sb.append("  \"webExportDirectory\": ").append(JsonHelper.toJsonString(webExportDirectory)).append(",\n");
+        sb.append("  \"tagIndexUrl\": ").append(JsonHelper.toJsonString(tagIndexUrl)).append(",\n");
         sb.append("  \"tagSuggestionPrompt\": ").append(JsonHelper.toJsonString(tagSuggestionPrompt)).append(",\n");
-        sb.append("  \"uriSuggestionPrompt\": ").append(JsonHelper.toJsonString(uriSuggestionPrompt)).append("\n");
+        sb.append("  \"uriSuggestionPrompt\": ").append(JsonHelper.toJsonString(uriSuggestionPrompt)).append(",\n");
+        sb.append("  \"descriptionSuggestionPrompt\": ").append(JsonHelper.toJsonString(descriptionSuggestionPrompt)).append("\n");
 
         sb.append("}");
         return sb.toString();

@@ -80,6 +80,14 @@ public class AppSettings {
                 .toList();
     }
 
+    public PublishingProfile getProfileById(String id) {
+        if (id == null) return null;
+        return publishingProfiles.stream()
+                .filter(p -> id.equals(p.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
     public BrowserSettings getBrowserSettings() {
         return browserSettings;
     }

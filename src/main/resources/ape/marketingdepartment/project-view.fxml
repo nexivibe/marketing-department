@@ -17,6 +17,7 @@
                 <Button text="Refresh" onAction="#onRefreshPosts"/>
                 <Separator orientation="VERTICAL"/>
                 <Button text="Project Settings" onAction="#onProjectSettings"/>
+                <Button text="Edit Pipeline" onAction="#onEditPipeline"/>
                 <Button text="App Settings" onAction="#onAppSettings"/>
             </ToolBar>
             <Label fx:id="projectTitleLabel"
@@ -35,32 +36,26 @@
                 <Label text="Posts" style="-fx-font-weight: bold; -fx-padding: 0 0 5 0;"/>
                 <ListView fx:id="postsListView" VBox.vgrow="ALWAYS"/>
 
-                <!-- Post metadata (date, author, read time) -->
-                <HBox fx:id="postMetadataBox" spacing="15" alignment="CENTER_LEFT" visible="false" managed="false">
+                <!-- Post metadata (compact single row) -->
+                <HBox fx:id="postMetadataBox" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false">
                     <padding>
-                        <Insets top="10"/>
+                        <Insets top="8"/>
                     </padding>
-                    <HBox spacing="5" alignment="CENTER_LEFT">
-                        <Label text="Date:" style="-fx-font-weight: bold;"/>
-                        <DatePicker fx:id="postDatePicker" prefWidth="130" onAction="#onPostDateChanged"/>
-                    </HBox>
-                    <HBox spacing="5" alignment="CENTER_LEFT">
-                        <Label text="Author:" style="-fx-font-weight: bold;"/>
-                        <TextField fx:id="postAuthorField" prefWidth="150" promptText="(project default)" onAction="#onPostAuthorChanged"/>
-                    </HBox>
-                    <Label fx:id="readTimeLabel" text="" style="-fx-text-fill: #888; -fx-font-style: italic;"/>
+                    <DatePicker fx:id="postDatePicker" prefWidth="120" onAction="#onPostDateChanged"/>
+                    <TextField fx:id="postAuthorField" prefWidth="120" promptText="Author" onAction="#onPostAuthorChanged"/>
+                    <Label fx:id="readTimeLabel" text="" style="-fx-text-fill: #666; -fx-font-size: 11px;"/>
                 </HBox>
 
-                <!-- Status action buttons -->
-                <HBox fx:id="statusButtonsBox" spacing="5" alignment="CENTER" visible="false" managed="false">
+                <!-- Status action buttons (compact) -->
+                <HBox fx:id="statusButtonsBox" spacing="4" alignment="CENTER" visible="false" managed="false">
                     <padding>
-                        <Insets top="5"/>
+                        <Insets top="4"/>
                     </padding>
-                    <Button fx:id="rewriteButton" text="AI Rewrite" onAction="#onRewritePost" style="-fx-background-color: #9b59b6; -fx-text-fill: white;"/>
-                    <Button fx:id="sendToReviewButton" text="Send to Review" onAction="#onSendToReview"/>
-                    <Button fx:id="markFinishedButton" text="Mark Finished" onAction="#onMarkFinished"/>
-                    <Button fx:id="reRequestReviewButton" text="Re-request Review" onAction="#onReRequestReview"/>
-                    <Button fx:id="reopenButton" text="Re-open" onAction="#onReopenPost" style="-fx-background-color: #e67e22; -fx-text-fill: white;"/>
+                    <Button fx:id="rewriteButton" text="Rewrite" onAction="#onRewritePost" style="-fx-background-color: #9b59b6; -fx-text-fill: white; -fx-font-size: 11px;"/>
+                    <Button fx:id="sendToReviewButton" text="To Review" onAction="#onSendToReview" style="-fx-font-size: 11px;"/>
+                    <Button fx:id="markFinishedButton" text="Finish" onAction="#onMarkFinished" style="-fx-font-size: 11px;"/>
+                    <Button fx:id="reRequestReviewButton" text="Re-review" onAction="#onReRequestReview" style="-fx-font-size: 11px;"/>
+                    <Button fx:id="reopenButton" text="Re-open" onAction="#onReopenPost" style="-fx-background-color: #e67e22; -fx-text-fill: white; -fx-font-size: 11px;"/>
                 </HBox>
             </VBox>
 
@@ -72,8 +67,20 @@
                         <padding>
                             <Insets bottom="5" left="5" right="5" top="10"/>
                         </padding>
-                        <Label text="Post Content" style="-fx-font-weight: bold; -fx-padding: 0 0 5 0;"/>
+                        <!-- Header with title and action buttons -->
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="Post Content" style="-fx-font-weight: bold;"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <HBox fx:id="transformButtonsBox" spacing="8" alignment="CENTER_RIGHT" visible="false" managed="false">
+                                <Button text="Edit Meta" onAction="#onEditMeta" style="-fx-font-size: 11px;"/>
+                                <Button text="Publish" onAction="#onPublish"
+                                        style="-fx-font-weight: bold; -fx-background-color: #27ae60; -fx-text-fill: white;"/>
+                            </HBox>
+                        </HBox>
                         <StackPane VBox.vgrow="ALWAYS">
+                            <padding>
+                                <Insets top="5"/>
+                            </padding>
                             <WebView fx:id="markdownPreview"/>
                             <Label fx:id="previewPlaceholder"
                                    text="Select a post to preview"
@@ -90,19 +97,6 @@
                         <WebView fx:id="reviewWebView" VBox.vgrow="ALWAYS"/>
                     </VBox>
                 </SplitPane>
-
-                <!-- Transform buttons -->
-                <HBox fx:id="transformButtonsBox" spacing="10" alignment="CENTER" visible="false" managed="false">
-                    <padding>
-                        <Insets top="5" bottom="5"/>
-                    </padding>
-                    <Button text="Transform for LinkedIn" onAction="#onTransformLinkedIn"/>
-                    <Button text="Transform for X" onAction="#onTransformTwitter"/>
-                    <Separator orientation="VERTICAL"/>
-                    <Button text="Web Publishing" onAction="#onWebPublishing"
-                            style="-fx-background-color: #27ae60; -fx-text-fill: white;"/>
-                    <Button text="Edit Tags" onAction="#onEditTags"/>
-                </HBox>
             </VBox>
         </SplitPane>
     </center>

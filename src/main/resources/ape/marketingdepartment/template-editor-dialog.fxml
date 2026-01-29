@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.web.WebView?>
+
+<VBox xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="ape.marketingdepartment.controller.TemplateEditorDialogController"
+      spacing="10" prefWidth="1100" prefHeight="750">
+    <padding>
+        <Insets bottom="15" left="15" right="15" top="15"/>
+    </padding>
+
+    <!-- Header -->
+    <HBox alignment="CENTER_LEFT" spacing="10">
+        <Label text="Post Template Editor" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Label fx:id="statusLabel" style="-fx-text-fill: #666;"/>
+    </HBox>
+
+    <!-- Main content split -->
+    <SplitPane dividerPositions="0.55" VBox.vgrow="ALWAYS" orientation="HORIZONTAL">
+        <!-- Left side: Template editor -->
+        <VBox spacing="8">
+            <HBox alignment="CENTER_LEFT" spacing="10">
+                <Label text="Template (HTML + Mustache)" style="-fx-font-weight: bold;"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button fx:id="validateButton" text="Validate" onAction="#onValidate"/>
+            </HBox>
+            <TextArea fx:id="templateArea" VBox.vgrow="ALWAYS"
+                      style="-fx-font-family: monospace; -fx-font-size: 12px;"
+                      wrapText="false"/>
+
+            <!-- Validation results -->
+            <VBox fx:id="validationBox" spacing="5" managed="false" visible="false">
+                <Label text="Validation Results:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="validationResultArea" prefRowCount="3"
+                          editable="false" wrapText="true"
+                          style="-fx-font-family: monospace; -fx-font-size: 11px;"/>
+            </VBox>
+        </VBox>
+
+        <!-- Right side: Live HTML Preview -->
+        <VBox spacing="8">
+            <HBox alignment="CENTER_LEFT" spacing="10">
+                <Label text="Live Preview" style="-fx-font-weight: bold;"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="Refresh Preview" onAction="#onRefreshPreview"/>
+            </HBox>
+            <WebView fx:id="previewWebView" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </SplitPane>
+
+    <!-- AI Enhancement Section -->
+    <TitledPane text="AI Template Enhancement" expanded="false">
+        <VBox spacing="10">
+            <padding>
+                <Insets bottom="10" left="10" right="10" top="10"/>
+            </padding>
+            <Label text="Describe how you want to modify the template:" style="-fx-font-weight: bold;"/>
+            <TextArea fx:id="aiPromptArea" prefRowCount="3" wrapText="true"
+                      promptText="e.g., Add a table of contents section, improve mobile responsiveness, add social sharing buttons..."/>
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Button fx:id="applyAiButton" text="Apply AI Changes" onAction="#onApplyAi" style="-fx-font-weight: bold;"/>
+                <ProgressIndicator fx:id="aiProgressIndicator" prefWidth="20" prefHeight="20" visible="false"/>
+                <Label fx:id="aiStatusLabel" style="-fx-text-fill: #666;"/>
+            </HBox>
+            <Label text="Note: AI changes are applied to the editor. Review and validate before saving."
+                   style="-fx-font-size: 11px; -fx-text-fill: #888; -fx-font-style: italic;"/>
+        </VBox>
+    </TitledPane>
+
+    <Separator/>
+
+    <!-- Footer buttons -->
+    <HBox spacing="10" alignment="CENTER_RIGHT">
+        <Button text="Restore from Disk" onAction="#onRestore"/>
+        <Button text="Reset to Default" onAction="#onResetToDefault" style="-fx-background-color: #e67e22; -fx-text-fill: white;"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Label text="Changes are not saved until you click Save"
+               style="-fx-font-size: 11px; -fx-text-fill: #888;"/>
+        <Button fx:id="cancelButton" text="Cancel" onAction="#onCancel"/>
+        <Button fx:id="saveButton" text="Save Template" onAction="#onSave"
+                style="-fx-font-weight: bold;"/>
+    </HBox>
+</VBox>

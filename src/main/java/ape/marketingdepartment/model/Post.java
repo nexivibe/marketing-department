@@ -28,11 +28,12 @@ public class Post {
     private PostStatus status;
     private LocalDate date;
     private String author; // null means use project default
+    private String description; // SEO meta description
     private int estimatedReadMinutes;
     private List<String> tags;
 
     private Post(Path markdownPath, String name, String title, PostStatus status,
-                 LocalDate date, String author, int estimatedReadMinutes, List<String> tags) {
+                 LocalDate date, String author, String description, int estimatedReadMinutes, List<String> tags) {
         this.markdownPath = markdownPath;
         this.metadataPath = markdownPath.resolveSibling(name + ".json");
         this.name = name;
@@ -40,6 +41,7 @@ public class Post {
         this.status = status;
         this.date = date;
         this.author = author;
+        this.description = description;
         this.estimatedReadMinutes = estimatedReadMinutes;
         this.tags = tags != null ? new ArrayList<>(tags) : new ArrayList<>();
     }
@@ -84,6 +86,20 @@ public class Post {
      */
     public void setAuthor(String author) {
         this.author = author;
+    }
+
+    /**
+     * Get the SEO description for this post.
+     */
+    public String getDescription() {
+        return description;
+    }
+
+    /**
+     * Set the SEO description for this post.
+     */
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public int getEstimatedReadMinutes() {
@@ -158,6 +174,7 @@ public class Post {
         PostStatus status = PostStatus.DRAFT;
         LocalDate date = null;
         String author = null;
+        String description = null;
         int storedReadMinutes = 0;
         List<String> tags = new ArrayList<>();
 
@@ -180,6 +197,7 @@ public class Post {
             }
 
             author = JsonHelper.extractStringField(metaContent, "author");
+            description = JsonHelper.extractStringField(metaContent, "description");
 
             String readTimeStr = JsonHelper.extractStringField(metaContent, "estimatedReadMinutes");
             if (readTimeStr != null) {
@@ -206,7 +224,7 @@ public class Post {
         int calculatedReadMinutes = calculateReadTime(markdownPath);
 
         // Create post
-        Post post = new Post(markdownPath, name, title, status, date, author, calculatedReadMinutes, tags);
+        Post post = new Post(markdownPath, name, title, status, date, author, description, calculatedReadMinutes, tags);
 
         // Update metadata if read time changed
         if (calculatedReadMinutes != storedReadMinutes && status != PostStatus.DRAFT) {
@@ -318,8 +336,8 @@ public class Post {
         Files.writeString(markdownPath, "# " + title + "\n\nStart writing your post here...\n");
 
         // No metadata file needed for DRAFT status
-        // Date defaults to today, author uses project default (null), empty tags
-        return new Post(markdownPath, name, title, PostStatus.DRAFT, LocalDate.now(), null, 0, new ArrayList<>());
+        // Date defaults to today, author uses project default (null), no description, empty tags
+        return new Post(markdownPath, name, title, PostStatus.DRAFT, LocalDate.now(), null, null, 0, new ArrayList<>());
     }
 
     public void save() throws IOException {
@@ -327,10 +345,19 @@ public class Post {
     }
 
     private void saveMetadata() throws IOException {
-        // Only save metadata file if status is not DRAFT
-        // This keeps the folder clean - just .md files for drafts
-        if (status == PostStatus.DRAFT) {
-            // Delete metadata file if it exists (post was reset to draft)
+        // Check if we have any metadata worth saving
+        boolean hasTags = tags != null && !tags.isEmpty();
+        boolean hasAuthor = author != null && !author.isEmpty();
+        boolean hasDescription = description != null && !description.isEmpty();
+        boolean hasDate = date != null;
+        boolean hasNonDraftStatus = status != PostStatus.DRAFT;
+
+        // Only save metadata file if there's something meaningful to save
+        // For DRAFT posts, we still save if there are tags, custom author, or description
+        boolean shouldSave = hasNonDraftStatus || hasTags || hasAuthor || hasDescription;
+
+        if (!shouldSave) {
+            // Delete metadata file if it exists and is truly empty
             if (Files.exists(metadataPath)) {
                 Files.delete(metadataPath);
             }
@@ -341,19 +368,24 @@ public class Post {
         sb.append("{\n");
         sb.append("  \"status\": \"").append(status.name()).append("\"");
 
-        if (date != null) {
+        if (hasDate) {
             sb.append(",\n  \"date\": ").append(JsonHelper.toJsonString(date.format(DATE_FORMAT)));
         }
 
         // Only save author if explicitly set (overriding project default)
-        if (author != null && !author.isEmpty()) {
+        if (hasAuthor) {
             sb.append(",\n  \"author\": ").append(JsonHelper.toJsonString(author));
+        }
+
+        // Save SEO description if set
+        if (hasDescription) {
+            sb.append(",\n  \"description\": ").append(JsonHelper.toJsonString(description));
         }
 
         sb.append(",\n  \"estimatedReadMinutes\": \"").append(estimatedReadMinutes).append("\"");
 
         // Save tags if any exist
-        if (tags != null && !tags.isEmpty()) {
+        if (hasTags) {
             sb.append(",\n  \"tags\": [");
             for (int i = 0; i < tags.size(); i++) {
                 if (i > 0) sb.append(", ");

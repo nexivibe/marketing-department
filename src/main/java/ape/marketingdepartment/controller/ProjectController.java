@@ -431,6 +431,7 @@ public class ProjectController {
 
             controller.setDialogStage(dialogStage);
             controller.setProject(project);
+            controller.setAppSettings(app.getSettings());
 
             dialogStage.showAndWait();
 
@@ -443,6 +444,28 @@ public class ProjectController {
             }
         } catch (IOException e) {
             showError("Failed to Open Settings", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onEditPipeline() {
+        try {
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
+                    getClass().getResource("/ape/marketingdepartment/pipeline-editor-dialog.fxml"));
+            javafx.scene.Parent root = loader.load();
+
+            javafx.stage.Stage dialogStage = new javafx.stage.Stage();
+            dialogStage.setTitle("Edit Pipeline - " + project.getTitle());
+            dialogStage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+            dialogStage.initOwner(postsListView.getScene().getWindow());
+            dialogStage.setScene(new javafx.scene.Scene(root));
+
+            PipelineEditorDialogController controller = loader.getController();
+            controller.initialize(dialogStage, app.getSettings(), project);
+
+            dialogStage.showAndWait();
+        } catch (IOException e) {
+            showError("Failed to Open Pipeline Editor", e.getMessage());
         }
     }
 
@@ -685,58 +708,30 @@ public class ProjectController {
     }
 
     @FXML
-    private void onTransformLinkedIn() {
+    private void onPublish() {
         Post selected = postsListView.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
         }
-        // This will be fully implemented in Phase 5
         try {
-            app.showPublishingDialog(project, selected, "linkedin");
+            app.showPipelineExecutionDialog(project, selected);
         } catch (IOException e) {
-            showError("Failed to Open Publishing Dialog", e.getMessage());
+            showError("Failed to Open Publishing Pipeline", e.getMessage());
         }
     }
 
     @FXML
-    private void onTransformTwitter() {
-        Post selected = postsListView.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            return;
-        }
-        // This will be fully implemented in Phase 5
-        try {
-            app.showPublishingDialog(project, selected, "twitter");
-        } catch (IOException e) {
-            showError("Failed to Open Publishing Dialog", e.getMessage());
-        }
-    }
-
-    @FXML
-    private void onWebPublishing() {
+    private void onEditMeta() {
         Post selected = postsListView.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
         }
         try {
-            app.showWebPublishingDialog(project, selected);
-        } catch (IOException e) {
-            showError("Failed to Open Web Publishing Dialog", e.getMessage());
-        }
-    }
-
-    @FXML
-    private void onEditTags() {
-        Post selected = postsListView.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            return;
-        }
-        try {
-            app.showTagEditorPopup(project, selected);
-            // Refresh the post to show updated tags
+            app.showMetaEditorPopup(project, selected);
+            // Refresh the post to show updated metadata
             onPostSelected(selected);
         } catch (IOException e) {
-            showError("Failed to Open Tag Editor", e.getMessage());
+            showError("Failed to Open Meta Editor", e.getMessage());
         }
     }
 

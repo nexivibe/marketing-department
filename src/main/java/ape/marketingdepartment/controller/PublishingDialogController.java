@@ -102,7 +102,7 @@ public class PublishingDialogController {
 
         try {
             String content = post.getMarkdownContent();
-            String systemPrompt = project.getSettings().getPlatformPrompt(platform);
+            String systemPrompt = getDefaultPrompt(platform);
 
             service.transformContent(systemPrompt, content)
                     .thenAccept(transformedContent -> {
@@ -277,6 +277,19 @@ public class PublishingDialogController {
         transformApproved = false;
         statusLabel.setText("Modified - needs approval");
         updateButtonStates();
+    }
+
+    private String getDefaultPrompt(String platform) {
+        return switch (platform.toLowerCase()) {
+            case "linkedin" -> "Transform this blog post into a professional LinkedIn post. " +
+                    "Keep it engaging and insightful. Use appropriate line breaks for readability. " +
+                    "Include 3-5 relevant hashtags at the end. Keep the tone professional but personable.";
+            case "twitter", "x" -> "Transform this blog post into a compelling tweet or thread. " +
+                    "If the content is substantial, create a thread with numbered tweets. " +
+                    "Keep each tweet under 280 characters. Make it punchy and engaging. " +
+                    "Include 2-3 relevant hashtags.";
+            default -> "Transform this content for social media.";
+        };
     }
 
     private void showError(String title, String message) {

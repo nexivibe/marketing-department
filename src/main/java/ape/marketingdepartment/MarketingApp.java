@@ -1,11 +1,12 @@
 package ape.marketingdepartment;
 
+import ape.marketingdepartment.controller.MetaEditorPopupController;
+import ape.marketingdepartment.controller.PipelineExecutionController;
 import ape.marketingdepartment.controller.ProjectController;
 import ape.marketingdepartment.controller.PublishingDialogController;
 import ape.marketingdepartment.controller.SettingsController;
 import ape.marketingdepartment.controller.StartupController;
 import ape.marketingdepartment.controller.TagEditorPopupController;
-import ape.marketingdepartment.controller.WebPublishingDialogController;
 import ape.marketingdepartment.model.AppSettings;
 import ape.marketingdepartment.model.Post;
 import ape.marketingdepartment.model.Project;
@@ -106,35 +107,40 @@ public class MarketingApp extends Application {
         dialogStage.showAndWait();
     }
 
-    public void showWebPublishingDialog(Project project, Post post) throws IOException {
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("web-publishing-dialog.fxml"));
+    public void showTagEditorPopup(Project project, Post post) throws IOException {
+        // Deprecated - use showMetaEditorPopup instead
+        showMetaEditorPopup(project, post);
+    }
+
+    public void showMetaEditorPopup(Project project, Post post) throws IOException {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("meta-editor-popup.fxml"));
         Parent root = loader.load();
 
         Stage dialogStage = new Stage();
-        dialogStage.setTitle("Web Publishing - " + post.getTitle());
+        dialogStage.setTitle("Edit Metadata - " + post.getTitle());
         dialogStage.initModality(Modality.WINDOW_MODAL);
         dialogStage.initOwner(primaryStage);
         dialogStage.setScene(new Scene(root));
         dialogStage.setResizable(true);
 
-        WebPublishingDialogController controller = loader.getController();
+        MetaEditorPopupController controller = loader.getController();
         controller.initialize(dialogStage, settings, project, post);
 
         dialogStage.showAndWait();
     }
 
-    public void showTagEditorPopup(Project project, Post post) throws IOException {
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("tag-editor-popup.fxml"));
+    public void showPipelineExecutionDialog(Project project, Post post) throws IOException {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("pipeline-execution-panel.fxml"));
         Parent root = loader.load();
 
         Stage dialogStage = new Stage();
-        dialogStage.setTitle("Edit Tags - " + post.getTitle());
+        dialogStage.setTitle("Publishing Pipeline - " + post.getTitle());
         dialogStage.initModality(Modality.WINDOW_MODAL);
         dialogStage.initOwner(primaryStage);
         dialogStage.setScene(new Scene(root));
-        dialogStage.setResizable(false);
+        dialogStage.setResizable(true);
 
-        TagEditorPopupController controller = loader.getController();
+        PipelineExecutionController controller = loader.getController();
         controller.initialize(dialogStage, settings, project, post);
 
         dialogStage.showAndWait();

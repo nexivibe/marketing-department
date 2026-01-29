@@ -42,34 +42,44 @@
 
             <Separator/>
 
-            <VBox spacing="5">
-                <Label text="LinkedIn Transform Prompt:" style="-fx-font-weight: bold;"/>
-                <TextArea fx:id="linkedinPromptArea" prefRowCount="3" wrapText="true"/>
-            </VBox>
-
-            <VBox spacing="5">
-                <Label text="Twitter/X Transform Prompt:" style="-fx-font-weight: bold;"/>
-                <TextArea fx:id="twitterPromptArea" prefRowCount="3" wrapText="true"/>
-            </VBox>
-
-            <Separator/>
-
             <Label text="Web Publishing" style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
+            <Label text="Social media prompts are configured per-stage in the Pipeline Editor."
+                   style="-fx-font-size: 11px; -fx-text-fill: #666; -fx-font-style: italic;"/>
 
-            <HBox spacing="10" alignment="CENTER_LEFT">
-                <Label text="URL Base:" prefWidth="120" style="-fx-font-weight: bold;"/>
-                <TextField fx:id="urlBaseField" prefWidth="300" promptText="https://example.com"/>
-            </HBox>
+            <VBox spacing="3">
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label text="URL Base:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                    <TextField fx:id="urlBaseField" prefWidth="300" promptText="https://example.com/blog/"/>
+                </HBox>
+                <HBox>
+                    <Label prefWidth="120"/>
+                    <Label text="Must end with / (e.g., https://example.com/blog/)" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+                </HBox>
+            </VBox>
 
             <HBox spacing="10" alignment="CENTER_LEFT">
                 <Label text="Template File:" prefWidth="120" style="-fx-font-weight: bold;"/>
-                <TextField fx:id="postTemplateField" prefWidth="300" promptText="post-template.html"/>
+                <TextField fx:id="postTemplateField" HBox.hgrow="ALWAYS" promptText="post-template.html"/>
+                <Button text="Browse" onAction="#onBrowseTemplate"/>
+                <Button text="Edit Template" onAction="#onEditTemplate" style="-fx-background-color: #3498db; -fx-text-fill: white;"/>
             </HBox>
 
             <HBox spacing="10" alignment="CENTER_LEFT">
                 <Label text="Export Directory:" prefWidth="120" style="-fx-font-weight: bold;"/>
-                <TextField fx:id="webExportDirField" prefWidth="300" promptText="./public"/>
+                <TextField fx:id="webExportDirField" HBox.hgrow="ALWAYS" promptText="./public"/>
+                <Button text="Browse" onAction="#onBrowseExportDir"/>
             </HBox>
+
+            <VBox spacing="3">
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label text="Tag Index URL:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                    <TextField fx:id="tagIndexUrlField" HBox.hgrow="ALWAYS" promptText="https://example.com/tags"/>
+                </HBox>
+                <HBox>
+                    <Label prefWidth="120"/>
+                    <Label text="Full URL to tag index page. Tags will link to this URL with #tag-name" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+                </HBox>
+            </VBox>
 
             <VBox spacing="5">
                 <Label text="Tag Suggestion Prompt:" style="-fx-font-weight: bold;"/>
@@ -81,6 +91,12 @@
                 <Label text="URI Suggestion Prompt:" style="-fx-font-weight: bold;"/>
                 <TextArea fx:id="uriSuggestionPromptArea" prefRowCount="3" wrapText="true"
                           promptText="Prompt for AI to suggest SEO-friendly URL slugs"/>
+            </VBox>
+
+            <VBox spacing="5">
+                <Label text="SEO Description Prompt:" style="-fx-font-weight: bold;"/>
+                <TextArea fx:id="descriptionSuggestionPromptArea" prefRowCount="3" wrapText="true"
+                          promptText="Prompt for AI to generate SEO meta descriptions"/>
             </VBox>
         </VBox>
     </ScrollPane>

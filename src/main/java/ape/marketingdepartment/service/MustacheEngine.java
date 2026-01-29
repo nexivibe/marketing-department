@@ -78,10 +78,11 @@ public class MustacheEngine {
                 }
                 replacement = listResult.toString();
             } else if (value instanceof Boolean bool) {
-                replacement = bool ? content : "";
+                // For boolean sections, recursively render the content
+                replacement = bool ? render(content, context) : "";
             } else {
-                // Truthy value - render content once
-                replacement = content;
+                // Truthy value - render content once with recursive processing
+                replacement = render(content, context);
             }
 
             matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
@@ -183,6 +184,13 @@ public class MustacheEngine {
 
     /**
      * Generate a default HTML template for blog posts.
+     * Implements best-practice SEO including:
+     * - Meta description
+     * - Open Graph tags for social sharing
+     * - Twitter Card tags
+     * - Canonical URL
+     * - JSON-LD structured data
+     * - Semantic HTML5 structure
      */
     public static String generateDefaultTemplate() {
         return """
@@ -192,10 +200,71 @@ public class MustacheEngine {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{title}}</title>
-    <meta name="description" content="{{title}} by {{author}}">
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="{{description}}">
+    <meta name="author" content="{{author}}">
     {{#tags}}
     <meta name="keywords" content="{{tagsCommaSeparated}}">
     {{/tags}}
+    <meta name="robots" content="index, follow">
+
+    <!-- Canonical URL -->
+    {{#canonicalUrl}}
+    <link rel="canonical" href="{{canonicalUrl}}">
+    {{/canonicalUrl}}
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="{{title}}">
+    <meta property="og:description" content="{{description}}">
+    {{#canonicalUrl}}
+    <meta property="og:url" content="{{canonicalUrl}}">
+    {{/canonicalUrl}}
+    <meta property="og:site_name" content="{{siteName}}">
+    {{#ogImage}}
+    <meta property="og:image" content="{{ogImage}}">
+    {{/ogImage}}
+    <meta property="article:author" content="{{author}}">
+    {{#date}}
+    <meta property="article:published_time" content="{{dateIso}}">
+    {{/date}}
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{title}}">
+    <meta name="twitter:description" content="{{description}}">
+    {{#ogImage}}
+    <meta name="twitter:image" content="{{ogImage}}">
+    {{/ogImage}}
+
+    {{{verificationComment}}}
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "{{title}}",
+        "description": "{{description}}",
+        "author": {
+            "@type": "Person",
+            "name": "{{author}}"
+        },
+        {{#date}}
+        "datePublished": "{{dateIso}}",
+        {{/date}}
+        {{#canonicalUrl}}
+        "url": "{{canonicalUrl}}",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "{{canonicalUrl}}"
+        },
+        {{/canonicalUrl}}
+        "wordCount": "{{wordCount}}"
+    }
+    </script>
+
     <style>
         * { box-sizing: border-box; }
         body {
@@ -293,7 +362,7 @@ public class MustacheEngine {
         </div>
         {{#tags}}
         <div class="tags">
-            {{#tagsList}}<span class="tag">{{.}}</span>{{/tagsList}}
+            {{#tagsList}}<a href="{{url}}" class="tag">{{name}}</a>{{/tagsList}}
         </div>
         {{/tags}}
     </article>

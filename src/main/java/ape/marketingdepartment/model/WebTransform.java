@@ -16,12 +16,14 @@ public class WebTransform {
     private long timestamp;       // Last modified timestamp
     private boolean exported;     // Whether HTML has been exported
     private String lastExportPath; // Full path of last export
+    private String verificationCode; // Code injected into HTML for verification
 
     public WebTransform() {
         this.uri = "";
         this.timestamp = 0;
         this.exported = false;
         this.lastExportPath = "";
+        this.verificationCode = "";
     }
 
     public WebTransform(String uri, long timestamp, boolean exported, String lastExportPath) {
@@ -61,6 +63,14 @@ public class WebTransform {
 
     public void setLastExportPath(String lastExportPath) {
         this.lastExportPath = lastExportPath;
+    }
+
+    public String getVerificationCode() {
+        return verificationCode;
+    }
+
+    public void setVerificationCode(String verificationCode) {
+        this.verificationCode = verificationCode;
     }
 
     /**
@@ -111,6 +121,11 @@ public class WebTransform {
             transform.lastExportPath = lastExportPath;
         }
 
+        String verificationCode = JsonHelper.extractStringField(json, "verificationCode");
+        if (verificationCode != null) {
+            transform.verificationCode = verificationCode;
+        }
+
         return transform;
     }
 
@@ -121,6 +136,7 @@ public class WebTransform {
         sb.append(", \"timestamp\": ").append(timestamp);
         sb.append(", \"exported\": ").append(exported);
         sb.append(", \"lastExportPath\": ").append(JsonHelper.toJsonString(lastExportPath));
+        sb.append(", \"verificationCode\": ").append(JsonHelper.toJsonString(verificationCode));
         sb.append("}");
         return sb.toString();
     }
@@ -190,6 +206,7 @@ public class WebTransform {
 
     /**
      * Get platform completion status from transforms file.
+     * For web export, also verifies the exported file actually exists on disk.
      */
     public static Map<String, Boolean> getPlatformStatus(Path postsDir, String postName) {
         Map<String, Boolean> status = new HashMap<>();
@@ -219,16 +236,34 @@ public class WebTransform {
                 status.put("twitter", approved != null && approved);
             }
 
-            // Check Web
+            // Check Web - must verify file actually exists
             String webJson = JsonHelper.extractObjectField(content, "web");
             if (webJson != null) {
                 Boolean exported = JsonHelper.extractBooleanField(webJson, "exported");
-                status.put("web", exported != null && exported);
+                String lastExportPath = JsonHelper.extractStringField(webJson, "lastExportPath");
+
+                // Only mark as exported if file exists on disk
+                boolean fileExists = false;
+                if (lastExportPath != null && !lastExportPath.isEmpty()) {
+                    fileExists = Files.exists(Path.of(lastExportPath));
+                }
+
+                status.put("web", exported != null && exported && fileExists);
             }
         } catch (IOException e) {
             System.err.println("Failed to load platform status: " + e.getMessage());
         }
 
         return status;
+    }
+
+    /**
+     * Check if the exported file actually exists on disk.
+     */
+    public boolean exportedFileExists() {
+        if (!exported || lastExportPath == null || lastExportPath.isEmpty()) {
+            return false;
+        }
+        return Files.exists(Path.of(lastExportPath));
     }
 }

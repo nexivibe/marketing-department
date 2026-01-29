@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="ape.marketingdepartment.controller.PipelineEditorDialogController"
+      spacing="15" prefWidth="650" prefHeight="550">
+    <padding>
+        <Insets bottom="15" left="15" right="15" top="15"/>
+    </padding>
+
+    <Label text="Pipeline Editor" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
+
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Label text="Pipeline Name:" style="-fx-font-weight: bold;"/>
+        <TextField fx:id="pipelineNameField" prefWidth="300" promptText="Default Pipeline"/>
+    </HBox>
+
+    <Separator/>
+
+    <!-- Stages List -->
+    <VBox spacing="8" VBox.vgrow="ALWAYS">
+        <HBox alignment="CENTER_LEFT" spacing="10">
+            <Label text="Pipeline Stages:" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <MenuButton text="Add Stage">
+                <items>
+                    <MenuItem text="Web Export" onAction="#onAddWebExport"/>
+                    <MenuItem text="URL Verify" onAction="#onAddUrlVerify"/>
+                    <SeparatorMenuItem/>
+                    <MenuItem text="LinkedIn Stage" onAction="#onAddLinkedIn"/>
+                    <MenuItem text="Twitter/X Stage" onAction="#onAddTwitter"/>
+                </items>
+            </MenuButton>
+        </HBox>
+
+        <ListView fx:id="stagesListView" VBox.vgrow="ALWAYS"/>
+
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <Button text="Move Up" onAction="#onMoveUp"/>
+            <Button text="Move Down" onAction="#onMoveDown"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Edit Stage" onAction="#onEditStage"/>
+            <Button text="Remove Stage" onAction="#onRemoveStage" style="-fx-text-fill: #c0392b;"/>
+        </HBox>
+    </VBox>
+
+    <Separator/>
+
+    <!-- Publishing Profiles Section -->
+    <VBox spacing="8">
+        <HBox alignment="CENTER_LEFT" spacing="10">
+            <Label text="Publishing Profiles:" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Manage Profiles" onAction="#onManageProfiles"/>
+        </HBox>
+        <Label fx:id="profilesCountLabel" text="0 profiles configured" style="-fx-text-fill: #666;"/>
+    </VBox>
+
+    <Separator/>
+
+    <HBox spacing="10" alignment="CENTER_RIGHT">
+        <Label fx:id="statusLabel" text="" style="-fx-text-fill: #666;" HBox.hgrow="ALWAYS"/>
+        <Button text="Save" onAction="#onSave" style="-fx-font-weight: bold; -fx-background-color: #27ae60; -fx-text-fill: white;"/>
+        <Button text="Cancel" onAction="#onCancel"/>
+    </HBox>
+</VBox>

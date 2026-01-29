@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="ape.marketingdepartment.controller.MetaEditorPopupController"
+      spacing="12" prefWidth="500" prefHeight="500">
+    <padding>
+        <Insets bottom="15" left="15" right="15" top="15"/>
+    </padding>
+
+    <Label fx:id="titleLabel" text="Edit Post Metadata" style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
+
+    <!-- SEO Description Section -->
+    <VBox spacing="5">
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <Label text="SEO Description:" style="-fx-font-weight: bold;"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="descriptionCharCount" text="0/160" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+        </HBox>
+        <TextArea fx:id="descriptionArea" prefRowCount="3" wrapText="true"
+                  promptText="Meta description for search engines (150-160 characters ideal)"/>
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <Button fx:id="suggestDescButton" text="AI Generate Description" onAction="#onSuggestDescription"
+                    style="-fx-background-color: #9b59b6; -fx-text-fill: white;"/>
+        </HBox>
+    </VBox>
+
+    <Separator/>
+
+    <!-- Tags Section -->
+    <VBox spacing="5" VBox.vgrow="ALWAYS">
+        <Label text="Tags:" style="-fx-font-weight: bold;"/>
+        <ListView fx:id="tagsListView" VBox.vgrow="ALWAYS"/>
+
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <TextField fx:id="newTagField" HBox.hgrow="ALWAYS" promptText="Enter new tag" onAction="#onAddTag"/>
+            <Button text="Add" onAction="#onAddTag"/>
+            <Button text="Remove" onAction="#onRemoveTag"/>
+        </HBox>
+
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <Button fx:id="suggestTagsButton" text="AI Suggest Tags" onAction="#onSuggestTags"
+                    style="-fx-background-color: #9b59b6; -fx-text-fill: white;"/>
+        </HBox>
+    </VBox>
+
+    <Label fx:id="statusLabel" text="" style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+
+    <Separator/>
+
+    <HBox spacing="10" alignment="CENTER_RIGHT">
+        <Button text="Cancel" onAction="#onCancel"/>
+        <Button text="Save" onAction="#onSave" style="-fx-font-weight: bold;"/>
+    </HBox>
+</VBox>
