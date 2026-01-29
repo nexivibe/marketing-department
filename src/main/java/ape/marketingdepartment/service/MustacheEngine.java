@@ -370,4 +370,189 @@ public class MustacheEngine {
 </html>
 """;
     }
+
+    /**
+     * Generate default tag index template.
+     * Variables: siteName, tagsList (with name, slug, posts[])
+     */
+    public static String generateDefaultTagIndexTemplate() {
+        return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tags - {{siteName}}</title>
+    <meta name="description" content="Browse all posts by tag on {{siteName}}">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #111; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .tag-section { margin-bottom: 40px; }
+        .tag-section h2 {
+            color: #444;
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            padding: 8px 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+        .tag-section h2 a { color: inherit; text-decoration: none; }
+        .tag-section h2 .count { color: #888; font-weight: normal; font-size: 0.8em; }
+        .post-list { list-style: none; padding: 0; margin: 0; }
+        .post-list li { padding: 8px 0; border-bottom: 1px solid #eee; }
+        .post-list li:last-child { border-bottom: none; }
+        .post-list a { color: #2563eb; text-decoration: none; }
+        .post-list a:hover { text-decoration: underline; }
+        .post-date { color: #888; font-size: 0.85em; margin-left: 10px; }
+        .back-link { margin-bottom: 20px; }
+        .back-link a { color: #666; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="back-link"><a href="{{listingUrl}}">&larr; Back to all posts</a></div>
+    <h1>Tags</h1>
+    {{#tagsList}}
+    <div class="tag-section" id="{{slug}}">
+        <h2><a href="#{{slug}}">{{name}}</a> <span class="count">({{postCount}} posts)</span></h2>
+        <ul class="post-list">
+            {{#posts}}
+            <li><a href="{{url}}">{{title}}</a><span class="post-date">{{date}}</span></li>
+            {{/posts}}
+        </ul>
+    </div>
+    {{/tagsList}}
+</body>
+</html>
+""";
+    }
+
+    /**
+     * Generate default listing template for paginated post lists.
+     * Variables: siteName, pageNumber, totalPages, posts[], hasPrev, hasNext, prevUrl, nextUrl, pages[]
+     */
+    public static String generateDefaultListingTemplate() {
+        return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isFirstPage}}Blog{{/isFirstPage}}{{^isFirstPage}}Blog - Page {{pageNumber}}{{/isFirstPage}} - {{siteName}}</title>
+    <meta name="description" content="{{#isFirstPage}}Latest posts from {{siteName}}{{/isFirstPage}}{{^isFirstPage}}Page {{pageNumber}} of posts from {{siteName}}{{/isFirstPage}}">
+    {{#canonicalUrl}}<link rel="canonical" href="{{canonicalUrl}}">{{/canonicalUrl}}
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #111; }
+        .post-item {
+            margin-bottom: 30px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #eee;
+        }
+        .post-item:last-child { border-bottom: none; }
+        .post-item h2 { margin: 0 0 8px 0; font-size: 1.4em; }
+        .post-item h2 a { color: #2563eb; text-decoration: none; }
+        .post-item h2 a:hover { text-decoration: underline; }
+        .post-meta { color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        .post-meta span { margin-right: 15px; }
+        .post-excerpt { color: #444; }
+        .post-tags { margin-top: 10px; }
+        .post-tags a {
+            display: inline-block;
+            background: #e8e8e8;
+            color: #555;
+            padding: 2px 10px;
+            border-radius: 15px;
+            margin-right: 5px;
+            font-size: 0.8em;
+            text-decoration: none;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 40px;
+            flex-wrap: wrap;
+        }
+        .pagination a, .pagination span {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #333;
+        }
+        .pagination a:hover { background: #f5f5f5; }
+        .pagination .current { background: #2563eb; color: white; border-color: #2563eb; }
+        .pagination .disabled { color: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>{{#isFirstPage}}Latest Posts{{/isFirstPage}}{{^isFirstPage}}Posts - Page {{pageNumber}}{{/isFirstPage}}</h1>
+
+    {{#posts}}
+    <article class="post-item">
+        <h2><a href="{{url}}">{{title}}</a></h2>
+        <div class="post-meta">
+            <span>By {{author}}</span>
+            <span>{{date}}</span>
+            <span>{{readTime}}</span>
+        </div>
+        {{#description}}<p class="post-excerpt">{{description}}</p>{{/description}}
+        {{#hasTags}}
+        <div class="post-tags">
+            {{#tags}}<a href="{{tagUrl}}">{{tagName}}</a>{{/tags}}
+        </div>
+        {{/hasTags}}
+    </article>
+    {{/posts}}
+
+    {{#hasMultiplePages}}
+    <nav class="pagination">
+        {{#hasPrev}}<a href="{{prevUrl}}">&larr; Newer</a>{{/hasPrev}}
+        {{^hasPrev}}<span class="disabled">&larr; Newer</span>{{/hasPrev}}
+
+        {{#pages}}
+        {{#isCurrent}}<span class="current">{{number}}</span>{{/isCurrent}}
+        {{^isCurrent}}<a href="{{url}}">{{number}}</a>{{/isCurrent}}
+        {{/pages}}
+
+        {{#hasNext}}<a href="{{nextUrl}}">Older &rarr;</a>{{/hasNext}}
+        {{^hasNext}}<span class="disabled">Older &rarr;</span>{{/hasNext}}
+    </nav>
+    {{/hasMultiplePages}}
+</body>
+</html>
+""";
+    }
+
+    /**
+     * Load template from file, or generate specified default if not found.
+     */
+    public static String loadOrCreateTemplate(Path projectPath, String templateName, String defaultContent) throws IOException {
+        Path templatePath = projectPath.resolve(templateName);
+
+        if (Files.exists(templatePath)) {
+            return Files.readString(templatePath);
+        }
+
+        // Create with provided default
+        Files.writeString(templatePath, defaultContent);
+        return defaultContent;
+    }
 }

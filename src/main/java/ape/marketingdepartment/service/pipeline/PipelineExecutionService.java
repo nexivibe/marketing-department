@@ -2,6 +2,7 @@ package ape.marketingdepartment.service.pipeline;
 
 import ape.marketingdepartment.model.*;
 import ape.marketingdepartment.model.pipeline.*;
+import ape.marketingdepartment.service.IndexExportService;
 import ape.marketingdepartment.service.WebExportService;
 import ape.marketingdepartment.service.ai.AiReviewService;
 import ape.marketingdepartment.service.ai.AiServiceFactory;
@@ -10,6 +11,7 @@ import ape.marketingdepartment.service.publishing.PublishingServiceFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -19,6 +21,7 @@ import java.util.function.Consumer;
 public class PipelineExecutionService {
 
     private final WebExportService webExportService;
+    private final IndexExportService indexExportService;
     private final UrlVerificationService verificationService;
     private final PublishingServiceFactory publishingServiceFactory;
     private final AiServiceFactory aiServiceFactory;
@@ -27,6 +30,7 @@ public class PipelineExecutionService {
     public PipelineExecutionService(AppSettings appSettings) {
         this.appSettings = appSettings;
         this.webExportService = new WebExportService();
+        this.indexExportService = new IndexExportService();
         this.verificationService = new UrlVerificationService();
         this.publishingServiceFactory = new PublishingServiceFactory(appSettings.getBrowserSettings());
         this.aiServiceFactory = new AiServiceFactory(appSettings);
@@ -70,10 +74,31 @@ public class PipelineExecutionService {
             webTransform.setLastExportPath(exportedPath.toString());
             webTransform.save(project.getPostsDirectory(), post.getName());
 
-            statusListener.accept("Export complete: " + exportedPath.getFileName());
+            // Export tag index and listing pages for all published posts
+            statusListener.accept("Exporting tag index and listing pages...");
+            List<Post> publishedPosts = project.getPosts().stream()
+                    .filter(p -> p.getStatus() != PostStatus.DRAFT)
+                    .toList();
 
-            PipelineExecution.StageResult result = PipelineExecution.StageResult.completed(
-                    "Exported to: " + exportedPath);
+            IndexExportService.ExportResult indexResult = indexExportService.exportAll(project, publishedPosts);
+
+            // Build result message with all export info
+            StringBuilder resultMsg = new StringBuilder();
+            resultMsg.append("Post exported: ").append(exportedPath.getFileName());
+
+            if (indexResult.tagIndexExported()) {
+                resultMsg.append(" | Tags: ").append(indexResult.tagCount());
+            }
+            if (indexResult.listingExported()) {
+                resultMsg.append(" | Listings: ").append(indexResult.listingPages().size()).append(" pages");
+            }
+            if (indexResult.hasErrors()) {
+                statusListener.accept("Index export had errors: " + indexResult.errorMessage());
+            }
+
+            statusListener.accept(resultMsg.toString());
+
+            PipelineExecution.StageResult result = PipelineExecution.StageResult.completed(resultMsg.toString());
             result.setPublishedUrl(fullUrl);
             return result;
 

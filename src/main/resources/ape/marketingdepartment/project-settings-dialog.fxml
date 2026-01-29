@@ -46,46 +46,72 @@
 
         <!-- Web Publishing Tab -->
         <Tab text="Web Publishing" closable="false">
-            <VBox spacing="15">
-                <padding>
-                    <Insets bottom="15" left="10" right="15" top="15"/>
-                </padding>
+            <ScrollPane fitToWidth="true" style="-fx-background-color: transparent;">
+                <VBox spacing="12">
+                    <padding>
+                        <Insets bottom="15" left="10" right="15" top="15"/>
+                    </padding>
 
-                <VBox spacing="3">
+                    <VBox spacing="3">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="URL Base:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                            <TextField fx:id="urlBaseField" HBox.hgrow="ALWAYS" promptText="https://example.com/blog/"/>
+                        </HBox>
+                        <HBox>
+                            <Label prefWidth="120"/>
+                            <Label text="Base URL for published posts (must end with /)" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+                        </HBox>
+                    </VBox>
+
                     <HBox spacing="10" alignment="CENTER_LEFT">
-                        <Label text="URL Base:" prefWidth="120" style="-fx-font-weight: bold;"/>
-                        <TextField fx:id="urlBaseField" HBox.hgrow="ALWAYS" promptText="https://example.com/blog/"/>
+                        <Label text="Export Directory:" prefWidth="120" style="-fx-font-weight: bold;"/>
+                        <TextField fx:id="webExportDirField" HBox.hgrow="ALWAYS" promptText="./public"/>
+                        <Button text="Browse" onAction="#onBrowseExportDir"/>
                     </HBox>
-                    <HBox>
-                        <Label prefWidth="120"/>
-                        <Label text="Base URL for published posts (must end with /)" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
-                    </HBox>
-                </VBox>
 
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Template File:" prefWidth="120" style="-fx-font-weight: bold;"/>
-                    <TextField fx:id="postTemplateField" HBox.hgrow="ALWAYS" promptText="post-template.html"/>
-                    <Button text="Browse" onAction="#onBrowseTemplate"/>
-                    <Button text="Edit Template" onAction="#onEditTemplate" style="-fx-background-color: #3498db; -fx-text-fill: white;"/>
-                </HBox>
+                    <Separator/>
+                    <Label text="Templates" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
 
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Export Directory:" prefWidth="120" style="-fx-font-weight: bold;"/>
-                    <TextField fx:id="webExportDirField" HBox.hgrow="ALWAYS" promptText="./public"/>
-                    <Button text="Browse" onAction="#onBrowseExportDir"/>
-                </HBox>
-
-                <VBox spacing="3">
                     <HBox spacing="10" alignment="CENTER_LEFT">
-                        <Label text="Tag Index URL:" prefWidth="120" style="-fx-font-weight: bold;"/>
-                        <TextField fx:id="tagIndexUrlField" HBox.hgrow="ALWAYS" promptText="https://example.com/tags"/>
+                        <Label text="Post Template:" prefWidth="120"/>
+                        <TextField fx:id="postTemplateField" HBox.hgrow="ALWAYS" promptText="post-template.html"/>
+                        <Button text="Browse" onAction="#onBrowseTemplate"/>
+                        <Button text="Edit" onAction="#onEditTemplate" style="-fx-background-color: #3498db; -fx-text-fill: white;"/>
                     </HBox>
-                    <HBox>
-                        <Label prefWidth="120"/>
-                        <Label text="Tags will link to this URL with #tag-name fragment" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label text="Tag Index:" prefWidth="120"/>
+                        <TextField fx:id="tagIndexTemplateField" HBox.hgrow="ALWAYS" promptText="tag-index-template.html"/>
+                        <Button text="Browse" onAction="#onBrowseTagIndexTemplate"/>
+                        <Button text="Edit" onAction="#onEditTagIndexTemplate" style="-fx-background-color: #3498db; -fx-text-fill: white;"/>
                     </HBox>
+
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label text="Listing Template:" prefWidth="120"/>
+                        <TextField fx:id="listingTemplateField" HBox.hgrow="ALWAYS" promptText="listing-template.html"/>
+                        <Button text="Browse" onAction="#onBrowseListingTemplate"/>
+                        <Button text="Edit" onAction="#onEditListingTemplate" style="-fx-background-color: #3498db; -fx-text-fill: white;"/>
+                    </HBox>
+
+                    <Separator/>
+                    <Label text="Listing Pages" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
+
+                    <VBox spacing="3">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Output Pattern:" prefWidth="120"/>
+                            <TextField fx:id="listingOutputPatternField" prefWidth="120" promptText="blog-"/>
+                            <Label text=".html" style="-fx-text-fill: #666;"/>
+                            <Label text="(e.g., blog-1.html, blog-2.html)" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+                        </HBox>
+                    </VBox>
+
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label text="Posts Per Page:" prefWidth="120"/>
+                        <Spinner fx:id="postsPerPageSpinner" prefWidth="80"/>
+                    </HBox>
+
                 </VBox>
-            </VBox>
+            </ScrollPane>
         </Tab>
 
         <!-- AI Prompts Tab -->

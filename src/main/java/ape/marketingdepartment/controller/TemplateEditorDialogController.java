@@ -54,17 +54,42 @@ public class TemplateEditorDialogController {
     private String originalTemplate;
     private boolean saved = false;
 
+    // Template type support
+    private String templateFileName;
+    private String defaultTemplateContent;
+    private ProjectSettingsDialogController.TemplateType templateType;
+
     private final WebExportService webExportService = new WebExportService();
     private final TemplateValidationService validationService = new TemplateValidationService();
     private AiServiceFactory aiServiceFactory;
 
+    /**
+     * Initialize for editing post template (backward compatible).
+     */
     public void initialize(Stage dialogStage, AppSettings appSettings, Project project, Post initialPost) {
+        initializeWithType(
+                dialogStage, appSettings, project, initialPost,
+                project.getSettings().getPostTemplate(),
+                MustacheEngine.generateDefaultTemplate(),
+                ProjectSettingsDialogController.TemplateType.POST
+        );
+    }
+
+    /**
+     * Initialize for editing any template type.
+     */
+    public void initializeWithType(Stage dialogStage, AppSettings appSettings, Project project, Post initialPost,
+                                    String templateFile, String defaultTemplate,
+                                    ProjectSettingsDialogController.TemplateType type) {
         this.dialogStage = dialogStage;
         this.appSettings = appSettings;
         this.project = project;
+        this.templateFileName = templateFile;
+        this.defaultTemplateContent = defaultTemplate;
+        this.templateType = type;
         this.aiServiceFactory = new AiServiceFactory(appSettings);
 
-        dialogStage.setTitle("Template Editor - " + project.getSettings().getPostTemplate());
+        dialogStage.setTitle("Template Editor - " + templateFile);
 
         // Setup post dropdown
         setupPostDropdown(initialPost);
@@ -138,7 +163,8 @@ public class TemplateEditorDialogController {
         try {
             String template = MustacheEngine.loadOrCreateTemplate(
                     project.getPath(),
-                    project.getSettings().getPostTemplate()
+                    templateFileName,
+                    defaultTemplateContent
             );
             originalTemplate = template;
             templateArea.setText(template);
@@ -321,31 +347,37 @@ public class TemplateEditorDialogController {
         return """
                 You are a web template expert. Modify the following HTML/Mustache template according to the user's request.
 
-                CRITICAL - PRESERVE ALL METADATA:
-                1. Keep ALL <meta> tags in <head> section intact (SEO, Open Graph, Twitter Cards)
-                2. Keep the JSON-LD structured data script intact
-                3. Keep the {{{verificationComment}}} for deployment verification
-                4. Keep the <link rel="canonical"> tag
-                5. Do NOT remove or modify any existing Mustache variables unless specifically requested
+                CRITICAL OUTPUT FORMAT:
+                - Return ONLY the raw HTML template starting with <!DOCTYPE html>
+                - Do NOT wrap in markdown code fences (no ```html or ```)
+                - Do NOT include any explanations before or after the template
+                - The response must be valid HTML that can be saved directly to a .html file
 
-                TEMPLATE RULES:
-                1. Return ONLY the complete modified template, no explanations or markdown code fences
-                2. Preserve all Mustache syntax: {{variable}}, {{{unescaped}}}, {{#section}}...{{/section}}, {{^section}}...{{/section}}
-                3. Keep the template valid HTML5 with proper DOCTYPE
-                4. Maintain responsive design and accessibility
+                PRESERVE ALL METADATA:
+                - Keep ALL <meta> tags in <head> section (SEO, Open Graph, Twitter Cards)
+                - Keep the JSON-LD structured data script
+                - Keep {{{verificationComment}}} for deployment verification
+                - Keep <link rel="canonical"> tag
+                - Do NOT remove existing Mustache variables unless specifically requested
+
+                MUSTACHE SYNTAX (preserve exactly):
+                - {{variable}} - HTML-escaped variable
+                - {{{variable}}} - Unescaped HTML (triple braces)
+                - {{#section}}...{{/section}} - Conditional/loop section
+                - {{^section}}...{{/section}} - Inverted section (if empty/false)
 
                 AVAILABLE VARIABLES:
                 - {{title}}, {{author}}, {{date}}, {{dateIso}}, {{readTime}}
-                - {{description}} - SEO meta description (REQUIRED in meta tags)
-                - {{{content}}} - Main HTML content (unescaped)
-                - {{#tags}}...{{/tags}} - Section rendered if tags exist
-                - {{#tagsList}}{{name}}, {{url}}{{/tagsList}} - Iterate over tags with name and URL
+                - {{description}} - SEO meta description
+                - {{{content}}} - Main HTML content (unescaped, triple braces)
+                - {{#tags}}...{{/tags}} - Section if tags exist
+                - {{#tagsList}}{{name}}, {{url}}{{/tagsList}} - Tag iteration
                 - {{canonicalUrl}}, {{siteName}}, {{ogImage}}, {{tagsCommaSeparated}}, {{wordCount}}
-                - {{{verificationComment}}} - Hidden verification code (MUST preserve)
+                - {{{verificationComment}}} - Hidden verification code
 
                 USER REQUEST: """ + userRequest + """
 
-                CURRENT TEMPLATE:
+                CURRENT TEMPLATE (modify and return the complete HTML):
                 """ + currentTemplate;
     }
 
@@ -414,12 +446,11 @@ public class TemplateEditorDialogController {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Reset to Default Template");
         confirm.setHeaderText("Reset to default generated template?");
-        confirm.setContentText("This will replace the current template with the default SEO-optimized template.\n\n" +
+        confirm.setContentText("This will replace the current template with the default template.\n\n" +
                 "The change will be loaded into the editor but NOT saved until you click Save.");
 
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-            String defaultTemplate = MustacheEngine.generateDefaultTemplate();
-            templateArea.setText(defaultTemplate);
+            templateArea.setText(defaultTemplateContent);
             refreshPreview();
             validationBox.setVisible(false);
             validationBox.setManaged(false);
@@ -445,7 +476,7 @@ public class TemplateEditorDialogController {
         }
 
         try {
-            Path templatePath = project.getPath().resolve(project.getSettings().getPostTemplate());
+            Path templatePath = project.getPath().resolve(templateFileName);
             Files.writeString(templatePath, templateArea.getText());
             originalTemplate = templateArea.getText();
             saved = true;

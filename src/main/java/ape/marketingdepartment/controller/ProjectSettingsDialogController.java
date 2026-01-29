@@ -4,6 +4,7 @@ import ape.marketingdepartment.model.AppSettings;
 import ape.marketingdepartment.model.Post;
 import ape.marketingdepartment.model.Project;
 import ape.marketingdepartment.model.ProjectSettings;
+import ape.marketingdepartment.service.MustacheEngine;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -31,8 +32,11 @@ public class ProjectSettingsDialogController {
     @FXML private TextArea rewritePromptArea;
     @FXML private TextField urlBaseField;
     @FXML private TextField postTemplateField;
+    @FXML private TextField tagIndexTemplateField;
+    @FXML private TextField listingTemplateField;
+    @FXML private TextField listingOutputPatternField;
+    @FXML private Spinner<Integer> postsPerPageSpinner;
     @FXML private TextField webExportDirField;
-    @FXML private TextField tagIndexUrlField;
     @FXML private TextArea tagSuggestionPromptArea;
     @FXML private TextArea uriSuggestionPromptArea;
     @FXML private TextArea descriptionSuggestionPromptArea;
@@ -48,6 +52,11 @@ public class ProjectSettingsDialogController {
     private void initialize() {
         // Initialize agent combo box
         agentComboBox.getItems().addAll("grok");
+
+        // Initialize posts per page spinner
+        SpinnerValueFactory<Integer> valueFactory =
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 100, 10);
+        postsPerPageSpinner.setValueFactory(valueFactory);
 
         // Set up button handlers
         saveButton.setOnAction(e -> onSave());
@@ -77,8 +86,11 @@ public class ProjectSettingsDialogController {
         // Web publishing settings
         urlBaseField.setText(settings.getUrlBase() != null ? settings.getUrlBase() : "");
         postTemplateField.setText(settings.getPostTemplate() != null ? settings.getPostTemplate() : "post-template.html");
+        tagIndexTemplateField.setText(settings.getTagIndexTemplate() != null ? settings.getTagIndexTemplate() : "tag-index-template.html");
+        listingTemplateField.setText(settings.getListingTemplate() != null ? settings.getListingTemplate() : "listing-template.html");
+        listingOutputPatternField.setText(settings.getListingOutputPattern() != null ? settings.getListingOutputPattern() : "blog-");
+        postsPerPageSpinner.getValueFactory().setValue(settings.getPostsPerPage() > 0 ? settings.getPostsPerPage() : 10);
         webExportDirField.setText(settings.getWebExportDirectory() != null ? settings.getWebExportDirectory() : "./public");
-        tagIndexUrlField.setText(settings.getTagIndexUrl() != null ? settings.getTagIndexUrl() : "");
         tagSuggestionPromptArea.setText(settings.getTagSuggestionPrompt() != null ? settings.getTagSuggestionPrompt() : "");
         uriSuggestionPromptArea.setText(settings.getUriSuggestionPrompt() != null ? settings.getUriSuggestionPrompt() : "");
         descriptionSuggestionPromptArea.setText(settings.getDescriptionSuggestionPrompt() != null ? settings.getDescriptionSuggestionPrompt() : "");
@@ -101,8 +113,11 @@ public class ProjectSettingsDialogController {
             settings.setUrlBase(urlBase);
 
             settings.setPostTemplate(postTemplateField.getText().trim());
+            settings.setTagIndexTemplate(tagIndexTemplateField.getText().trim());
+            settings.setListingTemplate(listingTemplateField.getText().trim());
+            settings.setListingOutputPattern(listingOutputPatternField.getText().trim());
+            settings.setPostsPerPage(postsPerPageSpinner.getValue());
             settings.setWebExportDirectory(webExportDirField.getText().trim());
-            settings.setTagIndexUrl(tagIndexUrlField.getText().trim());
             settings.setTagSuggestionPrompt(tagSuggestionPromptArea.getText());
             settings.setUriSuggestionPrompt(uriSuggestionPromptArea.getText());
             settings.setDescriptionSuggestionPrompt(descriptionSuggestionPromptArea.getText());
@@ -115,8 +130,39 @@ public class ProjectSettingsDialogController {
         }
     }
 
+    // Template editing methods
+
     @FXML
     private void onEditTemplate() {
+        openTemplateEditor(
+                postTemplateField.getText(),
+                "Post Template",
+                MustacheEngine.generateDefaultTemplate(),
+                TemplateType.POST
+        );
+    }
+
+    @FXML
+    private void onEditTagIndexTemplate() {
+        openTemplateEditor(
+                tagIndexTemplateField.getText(),
+                "Tag Index Template",
+                MustacheEngine.generateDefaultTagIndexTemplate(),
+                TemplateType.TAG_INDEX
+        );
+    }
+
+    @FXML
+    private void onEditListingTemplate() {
+        openTemplateEditor(
+                listingTemplateField.getText(),
+                "Listing Template",
+                MustacheEngine.generateDefaultListingTemplate(),
+                TemplateType.LISTING
+        );
+    }
+
+    private void openTemplateEditor(String templateFile, String title, String defaultTemplate, TemplateType type) {
         try {
             FXMLLoader loader = new FXMLLoader(
                     getClass().getResource("/ape/marketingdepartment/template-editor-dialog.fxml")
@@ -124,7 +170,7 @@ public class ProjectSettingsDialogController {
             Parent root = loader.load();
 
             Stage editorStage = new Stage();
-            editorStage.setTitle("Template Editor");
+            editorStage.setTitle(title + " - " + templateFile);
             editorStage.initModality(Modality.WINDOW_MODAL);
             editorStage.initOwner(dialogStage);
             editorStage.setScene(new Scene(root));
@@ -138,7 +184,7 @@ public class ProjectSettingsDialogController {
             }
 
             TemplateEditorDialogController controller = loader.getController();
-            controller.initialize(editorStage, appSettings, project, samplePost);
+            controller.initializeWithType(editorStage, appSettings, project, samplePost, templateFile, defaultTemplate, type);
 
             editorStage.showAndWait();
 
@@ -147,16 +193,31 @@ public class ProjectSettingsDialogController {
         }
     }
 
+    // Browse methods
+
     @FXML
     private void onBrowseTemplate() {
+        browseTemplateFile(postTemplateField, "Post Template");
+    }
+
+    @FXML
+    private void onBrowseTagIndexTemplate() {
+        browseTemplateFile(tagIndexTemplateField, "Tag Index Template");
+    }
+
+    @FXML
+    private void onBrowseListingTemplate() {
+        browseTemplateFile(listingTemplateField, "Listing Template");
+    }
+
+    private void browseTemplateFile(TextField targetField, String title) {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Select Template File");
+        chooser.setTitle("Select " + title + " File");
         chooser.getExtensionFilters().addAll(
                 new FileChooser.ExtensionFilter("HTML Files", "*.html", "*.htm"),
                 new FileChooser.ExtensionFilter("All Files", "*.*")
         );
 
-        // Set initial directory to project path
         File projectDir = project.getPath().toFile();
         if (projectDir.exists()) {
             chooser.setInitialDirectory(projectDir);
@@ -164,9 +225,9 @@ public class ProjectSettingsDialogController {
 
         File selectedFile = chooser.showOpenDialog(dialogStage);
         if (selectedFile != null) {
-            String pathToUse = askRelativeOrAbsolute(selectedFile.toPath(), "template file");
+            String pathToUse = askRelativeOrAbsolute(selectedFile.toPath(), title.toLowerCase());
             if (pathToUse != null) {
-                postTemplateField.setText(pathToUse);
+                targetField.setText(pathToUse);
             }
         }
     }
@@ -176,7 +237,6 @@ public class ProjectSettingsDialogController {
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("Select Export Directory");
 
-        // Set initial directory to project path or current export dir
         String currentDir = webExportDirField.getText().trim();
         File initialDir = project.getPath().toFile();
 
@@ -205,37 +265,31 @@ public class ProjectSettingsDialogController {
 
     /**
      * Ask the user whether to use relative or absolute path.
-     * Returns the chosen path string, or null if cancelled.
      */
     private String askRelativeOrAbsolute(Path selectedPath, String itemName) {
         Path projectPath = project.getPath().toAbsolutePath();
         Path absolutePath = selectedPath.toAbsolutePath();
 
-        // Check if we can make a relative path
         String relativePath = null;
         try {
             Path relative = projectPath.relativize(absolutePath);
-            // Check if the relative path doesn't go up too many directories
             String relativeStr = relative.toString();
             if (!relativeStr.startsWith("..") || relativeStr.split("\\.\\.").length <= 3) {
                 relativePath = "./" + relativeStr.replace("\\", "/");
             }
         } catch (IllegalArgumentException e) {
-            // Can't create relative path (different roots)
+            // Can't create relative path
         }
 
         if (relativePath == null) {
-            // Can't make relative, just use absolute
             return absolutePath.toString();
         }
 
-        // Ask user which to use - use a custom dialog to show full paths
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Path Type");
         alert.setHeaderText("Choose path type for " + itemName);
         alert.setResizable(true);
 
-        // Create content with full paths visible in a VBox with labels
         javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10);
         content.setPadding(new javafx.geometry.Insets(10));
 
@@ -260,9 +314,9 @@ public class ProjectSettingsDialogController {
 
         ButtonType relativeButton = new ButtonType("Use Relative");
         ButtonType absoluteButton = new ButtonType("Use Absolute");
-        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType cancelBtn = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
 
-        alert.getButtonTypes().setAll(relativeButton, absoluteButton, cancelButton);
+        alert.getButtonTypes().setAll(relativeButton, absoluteButton, cancelBtn);
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent()) {
@@ -285,5 +339,14 @@ public class ProjectSettingsDialogController {
 
     private void showError(String title, String message) {
         ErrorDialog.showDetailed(title, title, message);
+    }
+
+    /**
+     * Enum to identify template types for the editor.
+     */
+    public enum TemplateType {
+        POST,
+        TAG_INDEX,
+        LISTING
     }
 }

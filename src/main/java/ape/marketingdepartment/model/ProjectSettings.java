@@ -17,8 +17,11 @@ public class ProjectSettings {
     // Web Publishing Settings
     private String urlBase;
     private String postTemplate;
+    private String tagIndexTemplate;      // Template for tag index page
+    private String listingTemplate;       // Template for paginated listing pages
+    private String listingOutputPattern;  // Pattern like "blog-" for blog-1.html, blog-2.html
+    private int postsPerPage;             // Number of posts per listing page
     private String webExportDirectory;
-    private String tagIndexUrl;  // Full URL to tag index page (tags link to tagIndexUrl#tagname)
     private String tagSuggestionPrompt;
     private String uriSuggestionPrompt;
     private String descriptionSuggestionPrompt;
@@ -33,8 +36,11 @@ public class ProjectSettings {
         // Web Publishing defaults
         this.urlBase = "";
         this.postTemplate = "post-template.html";
+        this.tagIndexTemplate = "tag-index-template.html";
+        this.listingTemplate = "listing-template.html";
+        this.listingOutputPattern = "blog-";
+        this.postsPerPage = 10;
         this.webExportDirectory = "./public";
-        this.tagIndexUrl = "";  // e.g., https://example.com/tags
         this.tagSuggestionPrompt = "Suggest 3-5 SEO-optimized tags for this blog post. Consider both search engine optimization and social media discoverability. Return only the tags as a comma-separated list, without hashtags or explanations.";
         this.uriSuggestionPrompt = "Suggest an SEO-friendly URL slug for this blog post. The slug should be lowercase, use hyphens between words, be concise (3-6 words), and include relevant keywords. Return only the slug without any explanation or the .html extension.";
         this.descriptionSuggestionPrompt = "Write a compelling SEO meta description for this blog post. The description should be 150-160 characters, include the main keyword naturally, have a clear call-to-action or value proposition, and entice users to click. Return only the description text without quotes or explanations.";
@@ -94,6 +100,38 @@ public class ProjectSettings {
         this.postTemplate = postTemplate;
     }
 
+    public String getTagIndexTemplate() {
+        return tagIndexTemplate;
+    }
+
+    public void setTagIndexTemplate(String tagIndexTemplate) {
+        this.tagIndexTemplate = tagIndexTemplate;
+    }
+
+    public String getListingTemplate() {
+        return listingTemplate;
+    }
+
+    public void setListingTemplate(String listingTemplate) {
+        this.listingTemplate = listingTemplate;
+    }
+
+    public String getListingOutputPattern() {
+        return listingOutputPattern;
+    }
+
+    public void setListingOutputPattern(String listingOutputPattern) {
+        this.listingOutputPattern = listingOutputPattern;
+    }
+
+    public int getPostsPerPage() {
+        return postsPerPage;
+    }
+
+    public void setPostsPerPage(int postsPerPage) {
+        this.postsPerPage = postsPerPage > 0 ? postsPerPage : 10;
+    }
+
     public String getWebExportDirectory() {
         return webExportDirectory;
     }
@@ -102,12 +140,16 @@ public class ProjectSettings {
         this.webExportDirectory = webExportDirectory;
     }
 
+    /**
+     * Get the tag index URL, computed from the URL base.
+     * The tag index is always exported as "tags.html" in the export directory.
+     */
     public String getTagIndexUrl() {
-        return tagIndexUrl;
-    }
-
-    public void setTagIndexUrl(String tagIndexUrl) {
-        this.tagIndexUrl = tagIndexUrl;
+        if (urlBase == null || urlBase.isEmpty()) {
+            return "tags.html";
+        }
+        String base = urlBase.endsWith("/") ? urlBase : urlBase + "/";
+        return base + "tags.html";
     }
 
     public String getTagSuggestionPrompt() {
@@ -196,14 +238,33 @@ public class ProjectSettings {
             settings.postTemplate = postTemplate;
         }
 
+        String tagIndexTemplate = JsonHelper.extractStringField(json, "tagIndexTemplate");
+        if (tagIndexTemplate != null) {
+            settings.tagIndexTemplate = tagIndexTemplate;
+        }
+
+        String listingTemplate = JsonHelper.extractStringField(json, "listingTemplate");
+        if (listingTemplate != null) {
+            settings.listingTemplate = listingTemplate;
+        }
+
+        String listingOutputPattern = JsonHelper.extractStringField(json, "listingOutputPattern");
+        if (listingOutputPattern != null) {
+            settings.listingOutputPattern = listingOutputPattern;
+        }
+
+        String postsPerPageStr = JsonHelper.extractStringField(json, "postsPerPage");
+        if (postsPerPageStr != null) {
+            try {
+                settings.postsPerPage = Integer.parseInt(postsPerPageStr);
+            } catch (NumberFormatException e) {
+                settings.postsPerPage = 10;
+            }
+        }
+
         String webExportDir = JsonHelper.extractStringField(json, "webExportDirectory");
         if (webExportDir != null) {
             settings.webExportDirectory = webExportDir;
-        }
-
-        String tagIndexUrl = JsonHelper.extractStringField(json, "tagIndexUrl");
-        if (tagIndexUrl != null) {
-            settings.tagIndexUrl = tagIndexUrl;
         }
 
         String tagPrompt = JsonHelper.extractStringField(json, "tagSuggestionPrompt");
@@ -240,8 +301,11 @@ public class ProjectSettings {
         // Web publishing settings
         sb.append("  \"urlBase\": ").append(JsonHelper.toJsonString(urlBase)).append(",\n");
         sb.append("  \"postTemplate\": ").append(JsonHelper.toJsonString(postTemplate)).append(",\n");
+        sb.append("  \"tagIndexTemplate\": ").append(JsonHelper.toJsonString(tagIndexTemplate)).append(",\n");
+        sb.append("  \"listingTemplate\": ").append(JsonHelper.toJsonString(listingTemplate)).append(",\n");
+        sb.append("  \"listingOutputPattern\": ").append(JsonHelper.toJsonString(listingOutputPattern)).append(",\n");
+        sb.append("  \"postsPerPage\": ").append(postsPerPage).append(",\n");
         sb.append("  \"webExportDirectory\": ").append(JsonHelper.toJsonString(webExportDirectory)).append(",\n");
-        sb.append("  \"tagIndexUrl\": ").append(JsonHelper.toJsonString(tagIndexUrl)).append(",\n");
         sb.append("  \"tagSuggestionPrompt\": ").append(JsonHelper.toJsonString(tagSuggestionPrompt)).append(",\n");
         sb.append("  \"uriSuggestionPrompt\": ").append(JsonHelper.toJsonString(uriSuggestionPrompt)).append(",\n");
         sb.append("  \"descriptionSuggestionPrompt\": ").append(JsonHelper.toJsonString(descriptionSuggestionPrompt)).append(",\n");
