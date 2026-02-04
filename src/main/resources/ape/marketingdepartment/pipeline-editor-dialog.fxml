@@ -46,6 +46,9 @@
                     </Menu>
                     <SeparatorMenuItem/>
                     <MenuItem text="Dev.to Article" onAction="#onAddDevTo"/>
+                    <MenuItem text="Hacker News Export" onAction="#onAddHackerNewsExport"/>
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Facebook Copy Pasta" onAction="#onAddFacebookCopyPasta"/>
                 </items>
             </MenuButton>
         </HBox>

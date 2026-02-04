@@ -37,6 +37,7 @@ public class PipelineExecutionController {
     @FXML private VBox socialStagesBox;
     @FXML private ComboBox<PipelineStage> previewStageCombo;
     @FXML private TextArea transformPreviewArea;
+    @FXML private Button saveTransformButton;
     @FXML private Label statusLabel;
     @FXML private Label timerLabel;
     @FXML private ProgressIndicator progressIndicator;
@@ -59,6 +60,9 @@ public class PipelineExecutionController {
     private long operationStartTime;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
+    // Track original transform content to detect edits
+    private String lastLoadedTransformContent = "";
+
     public void initialize(Stage dialogStage, AppSettings appSettings, Project project, Post post) {
         this.dialogStage = dialogStage;
         this.appSettings = appSettings;
@@ -68,9 +72,26 @@ public class PipelineExecutionController {
         this.transformCache = new HashMap<>();
         this.stageCards = new HashMap<>();
 
-        // Set up the publishing logger
+        // Set up the publishing logger with file-based logging
         this.publishingLogger = new PublishingLogger();
         this.publishingLogger.setLogListener(this::onLogEntry);
+
+        // Initialize file-based loggers based on project settings
+        var settings = project.getSettings();
+        publishingLogger.initializeForProject(
+                project.getPath(),
+                settings.isApiLoggingEnabled(),
+                settings.isHolisticLoggingEnabled()
+        );
+
+        // Log session start
+        var holisticLogger = publishingLogger.getHolisticLogger();
+        if (holisticLogger != null) {
+            holisticLogger.sessionStart(project.getTitle());
+            holisticLogger.setContext("Pipeline");
+            holisticLogger.opened("Pipeline execution for: " + post.getTitle());
+        }
+
         this.executionService.setLogger(publishingLogger);
 
         loadPipeline();
@@ -123,6 +144,14 @@ public class PipelineExecutionController {
         });
 
         previewStageCombo.setOnAction(e -> loadTransformPreview());
+
+        // Listen for changes in the transform preview area to enable/disable save button
+        transformPreviewArea.textProperty().addListener((obs, oldText, newText) -> {
+            boolean hasChanges = !newText.equals(lastLoadedTransformContent);
+            boolean hasContent = newText != null && !newText.isBlank();
+            boolean hasStageSelected = previewStageCombo.getValue() != null;
+            saveTransformButton.setDisable(!hasChanges || !hasContent || !hasStageSelected);
+        });
     }
 
     private void buildStageCards() {
@@ -246,6 +275,19 @@ public class PipelineExecutionController {
                     return "Canonical URL will link to web export";
                 }
                 return "";
+            }
+            case FACEBOOK_COPY_PASTA -> {
+                return "Manual copy/paste to Facebook";
+            }
+            case HACKER_NEWS_EXPORT -> {
+                // Check if HN export exists
+                WebTransform webTransform = WebTransform.load(project.getPostsDirectory(), post.getName());
+                if (webTransform != null && webTransform.getHnExportPath() != null && !webTransform.getHnExportPath().isEmpty()) {
+                    return "Path: " + webTransform.getHnExportPath();
+                }
+                String exportDir = project.getSettings().getWebExportDirectory();
+                if (exportDir == null || exportDir.isEmpty()) exportDir = "./public";
+                return "Will export to: " + exportDir + " (as .hn.html)";
             }
             default -> {
                 return "";
@@ -551,6 +593,8 @@ public class PipelineExecutionController {
             case URL_VERIFY -> "Test Liveness";
             case GETLATE -> "Publish Now";
             case DEV_TO -> "Publish to Dev.to";
+            case FACEBOOK_COPY_PASTA -> "Generate & Copy";
+            case HACKER_NEWS_EXPORT -> "Export for HN";
         };
     }
 
@@ -563,8 +607,17 @@ public class PipelineExecutionController {
         // Get platform from profile or hint
         PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
         String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
+
+        // Fallback for stages without profiles or hints
         if (platform == null) {
-            return false;
+            // Use type-specific defaults
+            if (stage.getType() == PipelineStageType.FACEBOOK_COPY_PASTA) {
+                platform = "facebook_copy_pasta";
+            } else if (stage.getType() == PipelineStageType.HACKER_NEWS_EXPORT) {
+                platform = "hackernews";
+            } else {
+                return false;
+            }
         }
 
         // Check persisted transforms on disk
@@ -643,6 +696,12 @@ public class PipelineExecutionController {
     }
 
     private void executeStage(PipelineStage stage) {
+        // Log user action
+        var holisticLogger = publishingLogger.getHolisticLogger();
+        if (holisticLogger != null) {
+            holisticLogger.triggered("Execute " + stage.getType().getDisplayName() + " stage");
+        }
+
         // Mark as in progress
         execution.setStageResult(stage.getId(), PipelineExecution.StageResult.inProgress());
         updateStageStatuses();
@@ -652,6 +711,8 @@ public class PipelineExecutionController {
             case URL_VERIFY -> executeUrlVerify(stage);
             case GETLATE -> executeSocialPublish(stage);
             case DEV_TO -> executeDevToPublish(stage);
+            case FACEBOOK_COPY_PASTA -> executeFacebookCopyPasta(stage);
+            case HACKER_NEWS_EXPORT -> executeHackerNewsExport(stage);
         }
     }
 
@@ -703,6 +764,122 @@ public class PipelineExecutionController {
                 if (result.getStatus() == PipelineStageStatus.FAILED) {
                     ErrorDialog.showDetailed("URL Verification Failed",
                             "The published URL could not be verified.",
+                            result.getMessage());
+                }
+            });
+        }).start();
+    }
+
+    private void executeHackerNewsExport(PipelineStage stage) {
+        Platform.runLater(() -> startOperationTimer("Hacker News Export"));
+
+        String platform = stage.getPlatformHint() != null ? stage.getPlatformHint() : "hackernews";
+
+        // IMPORTANT: Check if the preview area has content for this stage that might have been edited
+        // If so, use and save that content instead of the cache to avoid losing edits
+        PipelineStage previewStage = previewStageCombo.getValue();
+        String previewContent = transformPreviewArea.getText();
+        boolean previewHasContentForThisStage = previewStage != null
+                && previewStage.getId().equals(stage.getId())
+                && previewContent != null
+                && !previewContent.isBlank()
+                && !previewContent.startsWith("No transform generated")
+                && !previewContent.startsWith("Generating...");
+
+        String transformToUse = null;
+
+        if (previewHasContentForThisStage) {
+            // Use preview content - it may have unsaved edits
+            transformToUse = previewContent;
+
+            // Save to cache and disk to preserve any edits
+            transformCache.put(stage.getCacheKey(), transformToUse);
+            saveTransformToDisk(platform, transformToUse);
+            lastLoadedTransformContent = transformToUse;
+            saveTransformButton.setDisable(true);
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Using and saving preview content for HN export...");
+        } else {
+            // Check for existing transform in cache
+            transformToUse = transformCache.get(stage.getCacheKey());
+
+            if (transformToUse == null || transformToUse.isBlank()) {
+                // Check disk for existing transform
+                Map<String, PlatformTransform> transforms =
+                        PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
+                PlatformTransform existing = transforms.get(platform);
+
+                if (existing != null && existing.getText() != null && !existing.getText().isBlank()) {
+                    transformToUse = existing.getText();
+                    transformCache.put(stage.getCacheKey(), transformToUse);
+                    appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Loaded HN transform from disk...");
+                }
+            }
+        }
+
+        if (transformToUse != null && !transformToUse.isBlank()) {
+            // Use existing transform - update preview and export
+            lastLoadedTransformContent = transformToUse;
+            transformPreviewArea.setText(transformToUse);
+            saveTransformButton.setDisable(true);
+            previewStageCombo.setValue(stage);
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Exporting HN transform to HTML...");
+            doHackerNewsExport(stage, transformToUse, platform);
+        } else {
+            // Generate transform first
+            updateStatus("Generating Hacker News content...");
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Generating Hacker News optimized content...");
+
+            executionService.generateTransformWithUrl(
+                    project, post, stage, execution.getVerifiedUrl(),
+                    status -> Platform.runLater(() -> updateStatus(status))
+            ).thenAccept(transform -> {
+                transformCache.put(stage.getCacheKey(), transform);
+                saveTransformToDisk(platform, transform);
+                Platform.runLater(() -> {
+                    lastLoadedTransformContent = transform;
+                    transformPreviewArea.setText(transform);
+                    saveTransformButton.setDisable(true);
+                    previewStageCombo.setValue(stage);
+                    appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Transform generated and cached, exporting to HTML...");
+                    doHackerNewsExport(stage, transform, platform);
+                });
+            }).exceptionally(ex -> {
+                Platform.runLater(() -> {
+                    stopOperationTimer("Generation failed");
+                    execution.setStageResult(stage.getId(),
+                            PipelineExecution.StageResult.failed("Transform failed: " + ex.getMessage()));
+                    saveExecution();
+                    updateStageStatuses();
+                    updateStatus("Transform failed: " + ex.getMessage());
+
+                    ErrorDialog.showDetailed("Transform Failed",
+                            "Failed to generate Hacker News content.",
+                            ex.getMessage());
+                });
+                return null;
+            });
+        }
+    }
+
+    private void doHackerNewsExport(PipelineStage stage, String transformedContent, String platform) {
+        new Thread(() -> {
+            PipelineExecution.StageResult result = executionService.executeHackerNewsExport(
+                    project, post, transformedContent,
+                    status -> Platform.runLater(() -> updateStatus(status))
+            );
+
+            Platform.runLater(() -> {
+                String resultText = result.getStatus() == PipelineStageStatus.COMPLETED ?
+                        "HN export completed" : "HN export " + result.getStatus().name().toLowerCase();
+                stopOperationTimer(resultText);
+
+                execution.setStageResult(stage.getId(), result);
+                saveExecution();
+                updateStageStatuses();
+
+                if (result.getStatus() == PipelineStageStatus.FAILED) {
+                    ErrorDialog.showDetailed("Hacker News Export Failed",
+                            "Failed to export HTML for Hacker News.",
                             result.getMessage());
                 }
             });
@@ -831,16 +1008,161 @@ public class PipelineExecutionController {
         });
     }
 
+    private void executeFacebookCopyPasta(PipelineStage stage) {
+        Platform.runLater(() -> startOperationTimer("Facebook Copy Pasta"));
+
+        // Check for cached transform
+        String cachedTransform = transformCache.get(stage.getCacheKey());
+
+        if (cachedTransform == null || cachedTransform.isBlank()) {
+            // Check disk for existing transform
+            String platform = stage.getPlatformHint() != null ? stage.getPlatformHint() : "facebook_copy_pasta";
+            Map<String, PlatformTransform> transforms =
+                    PlatformTransform.loadAll(project.getPostsDirectory(), post.getName());
+            PlatformTransform existing = transforms.get(platform);
+
+            if (existing != null && existing.getText() != null && !existing.getText().isBlank()) {
+                cachedTransform = existing.getText();
+                transformCache.put(stage.getCacheKey(), cachedTransform);
+            }
+        }
+
+        if (cachedTransform != null && !cachedTransform.isBlank()) {
+            // Use existing transform
+            showFacebookCopyPastaDialog(stage, cachedTransform);
+        } else {
+            // Need to generate transform first
+            updateStatus("Generating Facebook content...");
+            appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Generating Facebook content...");
+
+            String platform = stage.getPlatformHint() != null ? stage.getPlatformHint() : "facebook_copy_pasta";
+
+            executionService.generateTransformWithUrl(
+                    project, post, stage, execution.getVerifiedUrl(),
+                    status -> Platform.runLater(() -> updateStatus(status))
+            ).thenAccept(transform -> {
+                transformCache.put(stage.getCacheKey(), transform);
+                // Save to disk
+                saveTransformToDisk(platform, transform);
+                Platform.runLater(() -> {
+                    transformPreviewArea.setText(transform);
+                    appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Transform generated and saved");
+                    showFacebookCopyPastaDialog(stage, transform);
+                });
+            }).exceptionally(ex -> {
+                Platform.runLater(() -> {
+                    stopOperationTimer("Generation failed");
+                    execution.setStageResult(stage.getId(),
+                            PipelineExecution.StageResult.failed("Transform failed: " + ex.getMessage()));
+                    saveExecution();
+                    updateStageStatuses();
+                    updateStatus("Transform failed: " + ex.getMessage());
+
+                    ErrorDialog.showDetailed("Transform Failed",
+                            "Failed to generate Facebook content.",
+                            ex.getMessage());
+                });
+                return null;
+            });
+        }
+    }
+
+    private void showFacebookCopyPastaDialog(PipelineStage stage, String content) {
+        stopOperationTimer("Content ready");
+
+        // Create a dialog with the content
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Facebook Copy Pasta");
+        dialog.setHeaderText("Copy this content to Facebook");
+        dialog.initOwner(dialogStage);
+        dialog.setResizable(true);
+
+        // Create content area
+        VBox dialogContent = new VBox(10);
+        dialogContent.setPadding(new Insets(10));
+
+        TextArea contentArea = new TextArea(content);
+        contentArea.setWrapText(true);
+        contentArea.setEditable(true);  // Allow editing before copy
+        contentArea.setPrefRowCount(15);
+        contentArea.setPrefWidth(500);
+        contentArea.setStyle("-fx-font-family: 'System'; -fx-font-size: 13px;");
+        VBox.setVgrow(contentArea, Priority.ALWAYS);
+
+        Label instructions = new Label("Edit if needed, then click 'Copy to Clipboard' and paste into Facebook.");
+        instructions.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+
+        dialogContent.getChildren().addAll(instructions, contentArea);
+        dialog.getDialogPane().setContent(dialogContent);
+        dialog.getDialogPane().setPrefSize(550, 450);
+
+        // Add buttons
+        ButtonType copyButton = new ButtonType("Copy to Clipboard", ButtonBar.ButtonData.OK_DONE);
+        ButtonType doneButton = new ButtonType("Mark as Done", ButtonBar.ButtonData.APPLY);
+        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(copyButton, doneButton, cancelButton);
+
+        // Handle button actions
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == copyButton) {
+                // Copy to clipboard
+                javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+                javafx.scene.input.ClipboardContent clipboardContent = new javafx.scene.input.ClipboardContent();
+                clipboardContent.putString(contentArea.getText());
+                clipboard.setContent(clipboardContent);
+
+                // Save any edits
+                String editedContent = contentArea.getText();
+                if (!editedContent.equals(content)) {
+                    String platform = stage.getPlatformHint() != null ? stage.getPlatformHint() : "facebook_copy_pasta";
+                    transformCache.put(stage.getCacheKey(), editedContent);
+                    saveTransformToDisk(platform, editedContent);
+                }
+
+                appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Copied Facebook content to clipboard");
+                updateStatus("Content copied to clipboard - paste into Facebook!");
+
+                // Mark as completed
+                execution.setStageResult(stage.getId(),
+                        PipelineExecution.StageResult.completed("Copied to clipboard"));
+                saveExecution();
+            } else if (buttonType == doneButton) {
+                // Just mark as done without copying
+                String editedContent = contentArea.getText();
+                if (!editedContent.equals(content)) {
+                    String platform = stage.getPlatformHint() != null ? stage.getPlatformHint() : "facebook_copy_pasta";
+                    transformCache.put(stage.getCacheKey(), editedContent);
+                    saveTransformToDisk(platform, editedContent);
+                }
+
+                execution.setStageResult(stage.getId(),
+                        PipelineExecution.StageResult.completed("Marked as done"));
+                saveExecution();
+                appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Facebook stage marked as done");
+            }
+            return buttonType;
+        });
+
+        dialog.showAndWait();
+
+        // Always update stage statuses after dialog closes to reflect any changes
+        updateStageStatuses();
+    }
+
     private void loadTransformPreview() {
         PipelineStage stage = previewStageCombo.getValue();
         if (stage == null) {
+            lastLoadedTransformContent = "";
             transformPreviewArea.setText("");
+            saveTransformButton.setDisable(true);
             return;
         }
 
         String cached = transformCache.get(stage.getCacheKey());
         if (cached != null) {
+            lastLoadedTransformContent = cached;
             transformPreviewArea.setText(cached);
+            saveTransformButton.setDisable(true);
             return;
         }
 
@@ -854,10 +1176,13 @@ public class PipelineExecutionController {
 
         if (existing != null && existing.getText() != null) {
             transformCache.put(stage.getCacheKey(), existing.getText());
+            lastLoadedTransformContent = existing.getText();
             transformPreviewArea.setText(existing.getText());
         } else {
+            lastLoadedTransformContent = "";
             transformPreviewArea.setText("No transform generated yet. Click 'Regenerate' to create one.");
         }
+        saveTransformButton.setDisable(true);
     }
 
     @FXML
@@ -874,6 +1199,12 @@ public class PipelineExecutionController {
                 "Social";
         String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
 
+        // Log user action
+        var holisticLogger = publishingLogger.getHolisticLogger();
+        if (holisticLogger != null) {
+            holisticLogger.action("Regenerate transform", platformName + " for " + post.getTitle());
+        }
+
         startOperationTimer("Generating " + platformName + " Transform");
         updateStatus("Regenerating transform...");
         transformPreviewArea.setText("Generating...");
@@ -887,7 +1218,9 @@ public class PipelineExecutionController {
             saveTransformToDisk(platform, transform);
             Platform.runLater(() -> {
                 stopOperationTimer("Transform generated and saved");
+                lastLoadedTransformContent = transform;
                 transformPreviewArea.setText(transform);
+                saveTransformButton.setDisable(true);
                 updateStatus("Transform regenerated and saved");
                 updateStageStatuses();
             });
@@ -902,6 +1235,49 @@ public class PipelineExecutionController {
             });
             return null;
         });
+    }
+
+    @FXML
+    private void onSaveTransform() {
+        PipelineStage stage = previewStageCombo.getValue();
+        if (stage == null) {
+            updateStatus("Select a stage to save transform");
+            return;
+        }
+
+        String editedContent = transformPreviewArea.getText();
+        if (editedContent == null || editedContent.isBlank()) {
+            updateStatus("Nothing to save");
+            return;
+        }
+
+        // Get platform from profile or stage hint
+        PublishingProfile profile = appSettings.getProfileById(stage.getProfileId());
+        String platform = profile != null ? profile.getPlatform() : stage.getPlatformHint();
+
+        // Fallback for stages without profiles
+        if (platform == null) {
+            if (stage.getType() == PipelineStageType.FACEBOOK_COPY_PASTA) {
+                platform = "facebook_copy_pasta";
+            } else if (stage.getType() == PipelineStageType.HACKER_NEWS_EXPORT) {
+                platform = "hackernews";
+            } else {
+                updateStatus("Cannot determine platform for this stage");
+                return;
+            }
+        }
+
+        // Update cache and save to disk
+        transformCache.put(stage.getCacheKey(), editedContent);
+        saveTransformToDisk(platform, editedContent);
+
+        // Update tracking
+        lastLoadedTransformContent = editedContent;
+        saveTransformButton.setDisable(true);
+
+        updateStatus("Transform saved");
+        appendLog("[" + LocalDateTime.now().format(TIME_FORMAT) + "] Manually saved transform for " + platform);
+        updateStageStatuses();
     }
 
     @FXML
@@ -938,6 +1314,12 @@ public class PipelineExecutionController {
 
     @FXML
     private void onClose() {
+        // Log session end
+        var holisticLogger = publishingLogger.getHolisticLogger();
+        if (holisticLogger != null) {
+            holisticLogger.closed("Pipeline execution");
+        }
+
         saveExecution();
         dialogStage.close();
     }

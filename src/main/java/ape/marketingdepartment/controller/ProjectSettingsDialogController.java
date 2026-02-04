@@ -4,19 +4,23 @@ import ape.marketingdepartment.model.AppSettings;
 import ape.marketingdepartment.model.Post;
 import ape.marketingdepartment.model.Project;
 import ape.marketingdepartment.model.ProjectSettings;
+import ape.marketingdepartment.service.GitIgnoreManager;
 import ape.marketingdepartment.service.MustacheEngine;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -37,13 +41,29 @@ public class ProjectSettingsDialogController {
     @FXML private TextField listingOutputPatternField;
     @FXML private Spinner<Integer> postsPerPageSpinner;
     @FXML private TextField webExportDirField;
+    @FXML private TextArea userProfileArea;
     @FXML private TextArea tagSuggestionPromptArea;
     @FXML private TextArea uriSuggestionPromptArea;
     @FXML private TextArea descriptionSuggestionPromptArea;
     @FXML private Button saveButton;
     @FXML private Button cancelButton;
 
+    // Logging tab fields
+    @FXML private CheckBox aiLoggingCheckbox;
+    @FXML private CheckBox apiLoggingCheckbox;
+    @FXML private CheckBox holisticLoggingCheckbox;
+    @FXML private Label aiLogSizeLabel;
+    @FXML private Label apiLogSizeLabel;
+    @FXML private Label holisticLogSizeLabel;
+    @FXML private Label gitignoreStatusLabel;
+    @FXML private Button initGitignoreButton;
+    @FXML private VBox gitignoreEntriesBox;
+    @FXML private CheckBox ignoreAiLogCheckbox;
+    @FXML private CheckBox ignoreApiLogCheckbox;
+    @FXML private CheckBox ignoreHolisticLogCheckbox;
+
     private Stage dialogStage;
+    private GitIgnoreManager gitIgnoreManager;
     private Project project;
     private AppSettings appSettings;
     private boolean saved = false;
@@ -69,7 +89,9 @@ public class ProjectSettingsDialogController {
 
     public void setProject(Project project) {
         this.project = project;
+        this.gitIgnoreManager = new GitIgnoreManager(project.getPath());
         loadSettings();
+        loadLoggingSettings();
     }
 
     public void setAppSettings(AppSettings appSettings) {
@@ -94,6 +116,7 @@ public class ProjectSettingsDialogController {
         tagSuggestionPromptArea.setText(settings.getTagSuggestionPrompt() != null ? settings.getTagSuggestionPrompt() : "");
         uriSuggestionPromptArea.setText(settings.getUriSuggestionPrompt() != null ? settings.getUriSuggestionPrompt() : "");
         descriptionSuggestionPromptArea.setText(settings.getDescriptionSuggestionPrompt() != null ? settings.getDescriptionSuggestionPrompt() : "");
+        userProfileArea.setText(settings.getUserProfile() != null ? settings.getUserProfile() : "");
     }
 
     private void onSave() {
@@ -121,6 +144,12 @@ public class ProjectSettingsDialogController {
             settings.setTagSuggestionPrompt(tagSuggestionPromptArea.getText());
             settings.setUriSuggestionPrompt(uriSuggestionPromptArea.getText());
             settings.setDescriptionSuggestionPrompt(descriptionSuggestionPromptArea.getText());
+            settings.setUserProfile(userProfileArea.getText());
+
+            // Logging settings
+            settings.setAiLoggingEnabled(aiLoggingCheckbox.isSelected());
+            settings.setApiLoggingEnabled(apiLoggingCheckbox.isSelected());
+            settings.setHolisticLoggingEnabled(holisticLoggingCheckbox.isSelected());
 
             project.saveSettings();
             saved = true;
@@ -335,6 +364,212 @@ public class ProjectSettingsDialogController {
 
     public boolean isSaved() {
         return saved;
+    }
+
+    // ==================== Logging Tab Methods ====================
+
+    private void loadLoggingSettings() {
+        ProjectSettings settings = project.getSettings();
+
+        // Load logging checkboxes
+        aiLoggingCheckbox.setSelected(settings.isAiLoggingEnabled());
+        apiLoggingCheckbox.setSelected(settings.isApiLoggingEnabled());
+        holisticLoggingCheckbox.setSelected(settings.isHolisticLoggingEnabled());
+
+        // Update log file sizes
+        updateLogSizes();
+
+        // Load gitignore status
+        updateGitignoreStatus();
+
+        // Setup gitignore checkbox listeners
+        ignoreAiLogCheckbox.setOnAction(e -> updateGitignoreEntry(GitIgnoreManager.AI_LOG, ignoreAiLogCheckbox.isSelected()));
+        ignoreApiLogCheckbox.setOnAction(e -> updateGitignoreEntry(GitIgnoreManager.API_LOG, ignoreApiLogCheckbox.isSelected()));
+        ignoreHolisticLogCheckbox.setOnAction(e -> updateGitignoreEntry(GitIgnoreManager.HOLISTIC_LOG, ignoreHolisticLogCheckbox.isSelected()));
+    }
+
+    private void updateLogSizes() {
+        Path projectPath = project.getPath();
+
+        aiLogSizeLabel.setText(formatFileSize(projectPath.resolve("ai.log")));
+        apiLogSizeLabel.setText(formatFileSize(projectPath.resolve("api.log")));
+        holisticLogSizeLabel.setText(formatFileSize(projectPath.resolve("holistic.log")));
+    }
+
+    private String formatFileSize(Path file) {
+        try {
+            if (Files.exists(file)) {
+                long size = Files.size(file);
+                if (size < 1024) return size + " B";
+                if (size < 1024 * 1024) return String.format("%.1f KB", size / 1024.0);
+                return String.format("%.1f MB", size / (1024.0 * 1024.0));
+            }
+        } catch (IOException ignored) {
+        }
+        return "—";
+    }
+
+    private void updateGitignoreStatus() {
+        boolean exists = gitIgnoreManager.exists();
+        boolean allIgnored = gitIgnoreManager.allLogsIgnored();
+
+        if (!exists) {
+            gitignoreStatusLabel.setText("No .gitignore file found");
+            gitignoreStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #e74c3c;");
+            initGitignoreButton.setVisible(true);
+            initGitignoreButton.setManaged(true);
+            gitignoreEntriesBox.setDisable(true);
+        } else if (allIgnored) {
+            gitignoreStatusLabel.setText("All log files are excluded from Git");
+            gitignoreStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #27ae60;");
+            initGitignoreButton.setVisible(false);
+            initGitignoreButton.setManaged(false);
+            gitignoreEntriesBox.setDisable(false);
+        } else {
+            gitignoreStatusLabel.setText("Some log files may be tracked by Git");
+            gitignoreStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #f39c12;");
+            initGitignoreButton.setVisible(false);
+            initGitignoreButton.setManaged(false);
+            gitignoreEntriesBox.setDisable(false);
+        }
+
+        // Update checkboxes
+        ignoreAiLogCheckbox.setSelected(gitIgnoreManager.hasEntry(GitIgnoreManager.AI_LOG));
+        ignoreApiLogCheckbox.setSelected(gitIgnoreManager.hasEntry(GitIgnoreManager.API_LOG));
+        ignoreHolisticLogCheckbox.setSelected(gitIgnoreManager.hasEntry(GitIgnoreManager.HOLISTIC_LOG));
+    }
+
+    private void updateGitignoreEntry(String entry, boolean include) {
+        try {
+            if (include) {
+                gitIgnoreManager.addEntry(entry);
+            } else {
+                gitIgnoreManager.removeEntry(entry);
+            }
+            updateGitignoreStatus();
+        } catch (IOException e) {
+            showError("Failed to Update .gitignore", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onInitGitignore() {
+        try {
+            gitIgnoreManager.initializeWithDefaults();
+            updateGitignoreStatus();
+
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Success");
+            alert.setHeaderText(".gitignore initialized");
+            alert.setContentText("Created .gitignore with default log file exclusions.");
+            alert.showAndWait();
+        } catch (IOException e) {
+            showError("Failed to Initialize .gitignore", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onEditGitignore() {
+        Path gitignorePath = gitIgnoreManager.getGitignorePath();
+        try {
+            if (!Files.exists(gitignorePath)) {
+                Files.writeString(gitignorePath, "");
+            }
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().edit(gitignorePath.toFile());
+            } else {
+                showError("Cannot Open Editor", "Desktop editing is not supported on this system.\nFile location: " + gitignorePath);
+            }
+        } catch (IOException e) {
+            showError("Failed to Open .gitignore", e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onViewAiLog() {
+        openLogFile(project.getPath().resolve("ai.log"), "AI Log");
+    }
+
+    @FXML
+    private void onViewApiLog() {
+        openLogFile(project.getPath().resolve("api.log"), "API Log");
+    }
+
+    @FXML
+    private void onViewHolisticLog() {
+        openLogFile(project.getPath().resolve("holistic.log"), "Holistic Log");
+    }
+
+    private void openLogFile(Path logFile, String title) {
+        try {
+            if (!Files.exists(logFile)) {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle(title);
+                alert.setHeaderText("Log file does not exist yet");
+                alert.setContentText("The log file will be created when logging begins.\nPath: " + logFile);
+                alert.showAndWait();
+                return;
+            }
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(logFile.toFile());
+            } else {
+                // Fallback: show content in a dialog
+                String content = Files.readString(logFile);
+                showLogContentDialog(title, content);
+            }
+        } catch (IOException e) {
+            showError("Failed to Open Log", e.getMessage());
+        }
+    }
+
+    private void showLogContentDialog(String title, String content) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText("Log Contents");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        TextArea textArea = new TextArea(content);
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+        textArea.setPrefSize(600, 400);
+        textArea.setStyle("-fx-font-family: monospace;");
+
+        dialog.getDialogPane().setContent(textArea);
+        dialog.showAndWait();
+    }
+
+    @FXML
+    private void onClearAiLog() {
+        clearLogFile(project.getPath().resolve("ai.log"), "AI Log");
+    }
+
+    @FXML
+    private void onClearApiLog() {
+        clearLogFile(project.getPath().resolve("api.log"), "API Log");
+    }
+
+    @FXML
+    private void onClearHolisticLog() {
+        clearLogFile(project.getPath().resolve("holistic.log"), "Holistic Log");
+    }
+
+    private void clearLogFile(Path logFile, String title) {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Clear " + title);
+        confirm.setHeaderText("Clear " + title + "?");
+        confirm.setContentText("This will permanently delete the log contents.");
+
+        Optional<ButtonType> result = confirm.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            try {
+                if (Files.exists(logFile)) {
+                    Files.writeString(logFile, "");
+                }
+                updateLogSizes();
+            } catch (IOException e) {
+                showError("Failed to Clear Log", e.getMessage());
+            }
+        }
     }
 
     private void showError(String title, String message) {

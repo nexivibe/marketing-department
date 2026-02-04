@@ -22,7 +22,19 @@ public enum PipelineStageType {
     /**
      * Publish as an article on Dev.to.
      */
-    DEV_TO;
+    DEV_TO,
+
+    /**
+     * Generate Facebook-optimized content for manual copy/paste.
+     * Displays a text box with transformed content for the user to copy.
+     */
+    FACEBOOK_COPY_PASTA,
+
+    /**
+     * Export post as HTML optimized for Hacker News audience.
+     * Uses .hn.html extension and transforms content for HN style.
+     */
+    HACKER_NEWS_EXPORT;
 
     /**
      * Check if this stage is a gatekeeper stage.
@@ -50,7 +62,21 @@ public enum PipelineStageType {
      * Check if this stage requires content transformation.
      */
     public boolean requiresTransform() {
-        return this == GETLATE || this == DEV_TO;
+        return this == GETLATE || this == DEV_TO || this == FACEBOOK_COPY_PASTA || this == HACKER_NEWS_EXPORT;
+    }
+
+    /**
+     * Check if this stage is an export stage (produces HTML files).
+     */
+    public boolean isExportStage() {
+        return this == WEB_EXPORT || this == HACKER_NEWS_EXPORT;
+    }
+
+    /**
+     * Check if this stage is a copy/paste stage (manual publishing).
+     */
+    public boolean isCopyPastaStage() {
+        return this == FACEBOOK_COPY_PASTA;
     }
 
     public static PipelineStageType fromString(String value) {
@@ -74,6 +100,8 @@ public enum PipelineStageType {
             case URL_VERIFY -> "URL Liveness Check";
             case GETLATE -> "Social Post (GetLate)";
             case DEV_TO -> "Dev.to Article";
+            case FACEBOOK_COPY_PASTA -> "Facebook Copy Pasta";
+            case HACKER_NEWS_EXPORT -> "Hacker News Export";
         };
     }
 }

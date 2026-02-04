@@ -3,6 +3,7 @@ module ape.marketingdepartment {
     requires javafx.fxml;
     requires javafx.web;
     requires java.net.http;
+    requires java.desktop;
 
     requires org.controlsfx.controls;
     requires com.dlsc.formsfx;

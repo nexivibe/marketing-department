@@ -1,5 +1,6 @@
 package ape.marketingdepartment.service;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.function.Consumer;
 /**
  * Logger for publishing operations that stores log entries and notifies listeners.
  * Provides structured logging for API calls with request/response details.
+ * Optionally writes API transactions to api.log file for persistence.
  */
 public class PublishingLogger {
 
@@ -16,12 +18,44 @@ public class PublishingLogger {
 
     private final List<LogEntry> entries = new ArrayList<>();
     private Consumer<LogEntry> logListener;
+    private ApiLogger apiLogger;
+    private HolisticLogger holisticLogger;
 
     /**
      * Set a listener to be notified of new log entries.
      */
     public void setLogListener(Consumer<LogEntry> listener) {
         this.logListener = listener;
+    }
+
+    /**
+     * Set the API logger for file-based network transaction logging.
+     */
+    public void setApiLogger(ApiLogger apiLogger) {
+        this.apiLogger = apiLogger;
+    }
+
+    /**
+     * Set the holistic logger for human activity tracking.
+     */
+    public void setHolisticLogger(HolisticLogger holisticLogger) {
+        this.holisticLogger = holisticLogger;
+    }
+
+    /**
+     * Initialize file-based loggers for a project.
+     */
+    public void initializeForProject(Path projectDir, boolean apiLoggingEnabled, boolean holisticLoggingEnabled) {
+        if (apiLoggingEnabled) {
+            this.apiLogger = new ApiLogger(projectDir);
+        } else {
+            this.apiLogger = null;
+        }
+        if (holisticLoggingEnabled) {
+            this.holisticLogger = new HolisticLogger(projectDir);
+        } else {
+            this.holisticLogger = null;
+        }
     }
 
     /**
@@ -41,6 +75,11 @@ public class PublishingLogger {
             sb.append("\nRequest Body:\n").append(truncateBody(body, 500));
         }
         addEntry(LogLevel.REQUEST, sb.toString(), null);
+
+        // Also log to API log file
+        if (apiLogger != null) {
+            apiLogger.logRequest(service, method, url, null, body);
+        }
     }
 
     /**
@@ -55,6 +94,27 @@ public class PublishingLogger {
         }
         LogLevel level = statusCode >= 200 && statusCode < 300 ? LogLevel.RESPONSE : LogLevel.ERROR;
         addEntry(level, sb.toString(), null);
+
+        // Also log to API log file
+        if (apiLogger != null) {
+            apiLogger.logResponse(service, statusCode, null, body, durationMs);
+        }
+    }
+
+    /**
+     * Log a human action to the holistic log.
+     */
+    public void logHolisticAction(String action, String details) {
+        if (holisticLogger != null) {
+            holisticLogger.action(action, details);
+        }
+    }
+
+    /**
+     * Get the holistic logger for direct access.
+     */
+    public HolisticLogger getHolisticLogger() {
+        return holisticLogger;
     }
 
     /**

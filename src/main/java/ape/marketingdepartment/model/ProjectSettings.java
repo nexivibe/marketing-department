@@ -13,6 +13,7 @@ public class ProjectSettings {
     private String reviewerPrompt;
     private String rewritePrompt;
     private String defaultAuthor;
+    private String userProfile;  // Common identity/context prepended to all pipeline transformation prompts
 
     // Web Publishing Settings
     private String urlBase;
@@ -27,11 +28,17 @@ public class ProjectSettings {
     private String descriptionSuggestionPrompt;
     private String templateAiPrompt;  // Last used AI prompt for template editing
 
+    // Logging Settings
+    private boolean aiLoggingEnabled = true;
+    private boolean apiLoggingEnabled = true;
+    private boolean holisticLoggingEnabled = true;
+
     public ProjectSettings() {
         this.selectedAgent = "grok";
         this.reviewerPrompt = "You are a marketing content reviewer. Review this post for grammar, clarity, and engagement. Provide specific, actionable feedback.";
         this.rewritePrompt = "You are a professional content editor. Rewrite this post to improve clarity, engagement, and flow while preserving the original meaning and key points. Keep the same markdown format with the title as the first # header. Make it compelling and well-structured.";
         this.defaultAuthor = "";
+        this.userProfile = "";  // Blank by default - user can set their identity/context for AI transformations
 
         // Web Publishing defaults
         this.urlBase = "";
@@ -76,6 +83,14 @@ public class ProjectSettings {
 
     public void setDefaultAuthor(String defaultAuthor) {
         this.defaultAuthor = defaultAuthor;
+    }
+
+    public String getUserProfile() {
+        return userProfile;
+    }
+
+    public void setUserProfile(String userProfile) {
+        this.userProfile = userProfile;
     }
 
     // Web Publishing getters and setters
@@ -184,6 +199,31 @@ public class ProjectSettings {
         this.templateAiPrompt = templateAiPrompt;
     }
 
+    // Logging settings getters and setters
+    public boolean isAiLoggingEnabled() {
+        return aiLoggingEnabled;
+    }
+
+    public void setAiLoggingEnabled(boolean aiLoggingEnabled) {
+        this.aiLoggingEnabled = aiLoggingEnabled;
+    }
+
+    public boolean isApiLoggingEnabled() {
+        return apiLoggingEnabled;
+    }
+
+    public void setApiLoggingEnabled(boolean apiLoggingEnabled) {
+        this.apiLoggingEnabled = apiLoggingEnabled;
+    }
+
+    public boolean isHolisticLoggingEnabled() {
+        return holisticLoggingEnabled;
+    }
+
+    public void setHolisticLoggingEnabled(boolean holisticLoggingEnabled) {
+        this.holisticLoggingEnabled = holisticLoggingEnabled;
+    }
+
     public static ProjectSettings load(Path projectPath) {
         Path settingsFile = projectPath.resolve(SETTINGS_FILE);
         if (!Files.exists(settingsFile)) {
@@ -225,6 +265,11 @@ public class ProjectSettings {
         String defaultAuthor = JsonHelper.extractStringField(json, "defaultAuthor");
         if (defaultAuthor != null) {
             settings.defaultAuthor = defaultAuthor;
+        }
+
+        String userProfile = JsonHelper.extractStringField(json, "userProfile");
+        if (userProfile != null) {
+            settings.userProfile = userProfile;
         }
 
         // Parse web publishing settings
@@ -287,6 +332,22 @@ public class ProjectSettings {
             settings.templateAiPrompt = templateAiPrompt;
         }
 
+        // Parse logging settings
+        Boolean aiLogging = JsonHelper.extractBooleanField(json, "aiLoggingEnabled");
+        if (aiLogging != null) {
+            settings.aiLoggingEnabled = aiLogging;
+        }
+
+        Boolean apiLogging = JsonHelper.extractBooleanField(json, "apiLoggingEnabled");
+        if (apiLogging != null) {
+            settings.apiLoggingEnabled = apiLogging;
+        }
+
+        Boolean holisticLogging = JsonHelper.extractBooleanField(json, "holisticLoggingEnabled");
+        if (holisticLogging != null) {
+            settings.holisticLoggingEnabled = holisticLogging;
+        }
+
         return settings;
     }
 
@@ -297,6 +358,7 @@ public class ProjectSettings {
         sb.append("  \"reviewerPrompt\": ").append(JsonHelper.toJsonString(reviewerPrompt)).append(",\n");
         sb.append("  \"rewritePrompt\": ").append(JsonHelper.toJsonString(rewritePrompt)).append(",\n");
         sb.append("  \"defaultAuthor\": ").append(JsonHelper.toJsonString(defaultAuthor)).append(",\n");
+        sb.append("  \"userProfile\": ").append(JsonHelper.toJsonString(userProfile)).append(",\n");
 
         // Web publishing settings
         sb.append("  \"urlBase\": ").append(JsonHelper.toJsonString(urlBase)).append(",\n");
@@ -309,7 +371,12 @@ public class ProjectSettings {
         sb.append("  \"tagSuggestionPrompt\": ").append(JsonHelper.toJsonString(tagSuggestionPrompt)).append(",\n");
         sb.append("  \"uriSuggestionPrompt\": ").append(JsonHelper.toJsonString(uriSuggestionPrompt)).append(",\n");
         sb.append("  \"descriptionSuggestionPrompt\": ").append(JsonHelper.toJsonString(descriptionSuggestionPrompt)).append(",\n");
-        sb.append("  \"templateAiPrompt\": ").append(JsonHelper.toJsonString(templateAiPrompt)).append("\n");
+        sb.append("  \"templateAiPrompt\": ").append(JsonHelper.toJsonString(templateAiPrompt)).append(",\n");
+
+        // Logging settings
+        sb.append("  \"aiLoggingEnabled\": ").append(aiLoggingEnabled).append(",\n");
+        sb.append("  \"apiLoggingEnabled\": ").append(apiLoggingEnabled).append(",\n");
+        sb.append("  \"holisticLoggingEnabled\": ").append(holisticLoggingEnabled).append("\n");
 
         sb.append("}");
         return sb.toString();

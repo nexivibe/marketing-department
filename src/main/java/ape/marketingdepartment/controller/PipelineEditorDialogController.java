@@ -179,6 +179,16 @@ public class PipelineEditorDialogController {
         addDevToStage();
     }
 
+    @FXML
+    private void onAddFacebookCopyPasta() {
+        addFacebookCopyPastaStage();
+    }
+
+    @FXML
+    private void onAddHackerNewsExport() {
+        addHackerNewsExportStage();
+    }
+
     private void addStage(PipelineStageType type, String profileId) {
         PipelineStage stage = new PipelineStage(type, pipeline.getStages().size());
         if (profileId != null) {
@@ -251,6 +261,24 @@ public class PipelineEditorDialogController {
         pipeline.addStage(stage);
         refreshStagesList();
         statusLabel.setText("Added Dev.to Article stage");
+    }
+
+    private void addFacebookCopyPastaStage() {
+        PipelineStage stage = new PipelineStage(PipelineStageType.FACEBOOK_COPY_PASTA, pipeline.getStages().size());
+        stage.setPlatformHint("facebook_copy_pasta");
+        stage.setPrompt(PipelineStage.getDefaultPromptForPlatform("facebook_copy_pasta"));
+        pipeline.addStage(stage);
+        refreshStagesList();
+        statusLabel.setText("Added Facebook Copy Pasta stage");
+    }
+
+    private void addHackerNewsExportStage() {
+        PipelineStage stage = new PipelineStage(PipelineStageType.HACKER_NEWS_EXPORT, pipeline.getStages().size());
+        stage.setPlatformHint("hackernews");
+        stage.setPrompt(PipelineStage.getDefaultPromptForPlatform("hackernews"));
+        pipeline.addStage(stage);
+        refreshStagesList();
+        statusLabel.setText("Added Hacker News Export stage");
     }
 
     @FXML

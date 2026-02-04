@@ -87,6 +87,38 @@ public class WebExportService {
     }
 
     /**
+     * Export with custom transformed content (e.g., for Hacker News export).
+     * Uses the same template but with the provided markdown content.
+     *
+     * @param project           The project (for settings and template path)
+     * @param post              The post (for metadata like title, author, date)
+     * @param outputUri         The output filename (e.g., "my-post.hn.html")
+     * @param transformedContent The transformed markdown content to use
+     * @return Path to the exported HTML file
+     */
+    public Path exportWithContent(Project project, Post post, String outputUri, String transformedContent) throws IOException {
+        // Load or create template
+        String template = MustacheEngine.loadOrCreateTemplate(
+                project.getPath(),
+                project.getSettings().getPostTemplate()
+        );
+
+        // Build context with transformed content, using the outputUri for canonical URL
+        Map<String, Object> context = buildContextWithContent(project, post, transformedContent, outputUri);
+        String html = mustache.render(template, context);
+
+        // Resolve export directory
+        Path exportDir = resolveExportDirectory(project);
+        Files.createDirectories(exportDir);
+
+        // Write HTML file
+        Path outputPath = exportDir.resolve(outputUri);
+        Files.writeString(outputPath, html);
+
+        return outputPath;
+    }
+
+    /**
      * Generate a new verification code.
      */
     public String generateVerificationCode() {
@@ -218,6 +250,113 @@ public class WebExportService {
         } else {
             context.put("verificationComment", "");
         }
+
+        return context;
+    }
+
+    /**
+     * Build the template context using provided transformed content instead of post content.
+     *
+     * @param project           The project
+     * @param post              The post (for metadata)
+     * @param transformedContent The transformed markdown content
+     * @param outputUri         The output URI (e.g., "my-post.hn.html") for canonical URL
+     */
+    private Map<String, Object> buildContextWithContent(Project project, Post post, String transformedContent, String outputUri) throws IOException {
+        Map<String, Object> context = new HashMap<>();
+
+        // Basic post info
+        context.put("title", post.getTitle());
+        context.put("readTime", post.getReadTimeDisplay());
+
+        // Author (use project default if not set on post)
+        String author = post.getAuthor();
+        if (author == null || author.isBlank()) {
+            author = project.getSettings().getDefaultAuthor();
+        }
+        if (author == null || author.isBlank()) {
+            author = "Anonymous";
+        }
+        context.put("author", author);
+
+        // SEO Description - use post description or generate from title
+        String description = post.getDescription();
+        if (description == null || description.isBlank()) {
+            description = post.getTitle() + " by " + author;
+        }
+        context.put("description", description);
+
+        // Date
+        if (post.getDate() != null) {
+            context.put("date", post.getDate().format(DATE_DISPLAY_FORMAT));
+            context.put("dateIso", post.getDate().toString());
+        } else {
+            context.put("date", "");
+            context.put("dateIso", "");
+        }
+
+        // Convert TRANSFORMED markdown to HTML (not the original post content)
+        String markdownContent = transformedContent;
+        // Remove the title line if it starts with # (it's shown separately)
+        if (markdownContent.startsWith("# ")) {
+            int newlineIndex = markdownContent.indexOf('\n');
+            if (newlineIndex > 0) {
+                markdownContent = markdownContent.substring(newlineIndex + 1).trim();
+            }
+        }
+        Node document = markdownParser.parse(markdownContent);
+        String htmlContent = htmlRenderer.render(document);
+        context.put("content", htmlContent);
+
+        // Tags from the original post
+        List<String> tags = post.getTags();
+        context.put("tags", !tags.isEmpty());
+        context.put("tagsCommaSeparated", String.join(", ", tags));
+
+        // Build tagsList with name and url for each tag
+        String tagIndexUrl = project.getSettings().getTagIndexUrl();
+        List<Map<String, String>> tagObjects = tags.stream()
+                .map(tag -> {
+                    Map<String, String> tagObj = new HashMap<>();
+                    tagObj.put("name", tag);
+                    String tagSlug = tag.toLowerCase().replaceAll("\\s+", "-");
+                    if (tagIndexUrl != null && !tagIndexUrl.isEmpty()) {
+                        tagObj.put("url", tagIndexUrl + "#" + tagSlug);
+                    } else {
+                        tagObj.put("url", "#" + tagSlug);
+                    }
+                    return tagObj;
+                })
+                .toList();
+        context.put("tagsList", tagObjects);
+
+        // URL base
+        String urlBase = project.getSettings().getUrlBase();
+        context.put("urlBase", urlBase);
+
+        // Canonical URL - use the provided outputUri (e.g., "my-post.hn.html")
+        if (urlBase != null && !urlBase.isEmpty() && outputUri != null && !outputUri.isEmpty()) {
+            String base = urlBase.endsWith("/") ? urlBase : urlBase + "/";
+            String path = outputUri.startsWith("/") ? outputUri.substring(1) : outputUri;
+            context.put("canonicalUrl", base + path);
+        } else {
+            context.put("canonicalUrl", null);
+        }
+
+        // Site name
+        String siteName = extractSiteName(urlBase);
+        context.put("siteName", siteName != null ? siteName : "");
+
+        // OG Image - look in transformed content
+        String ogImage = extractFirstImage(markdownContent);
+        context.put("ogImage", ogImage);
+
+        // Word count
+        String[] words = markdownContent.trim().split("\\s+");
+        context.put("wordCount", words.length);
+
+        // No verification code for transformed exports
+        context.put("verificationComment", "");
 
         return context;
     }

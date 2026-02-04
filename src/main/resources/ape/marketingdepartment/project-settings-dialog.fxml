@@ -126,6 +126,16 @@
                            style="-fx-font-size: 11px; -fx-text-fill: #666; -fx-font-style: italic;" wrapText="true"/>
 
                     <VBox spacing="5">
+                        <Label text="User Profile (Identity Context):" style="-fx-font-weight: bold;"/>
+                        <TextArea fx:id="userProfileArea" prefRowCount="4" wrapText="true"
+                                  promptText="Describe your identity, brand voice, or context that should be included in all AI-generated content transformations. Leave blank if not needed."/>
+                        <Label text="This text is prepended to all pipeline transformation prompts to maintain consistent identity and voice."
+                               style="-fx-font-size: 10px; -fx-text-fill: #888;" wrapText="true"/>
+                    </VBox>
+
+                    <Separator/>
+
+                    <VBox spacing="5">
                         <Label text="Tag Suggestion Prompt:" style="-fx-font-weight: bold;"/>
                         <TextArea fx:id="tagSuggestionPromptArea" prefRowCount="3" wrapText="true"
                                   promptText="Prompt for AI to suggest SEO-optimized tags"/>
@@ -142,6 +152,86 @@
                         <TextArea fx:id="descriptionSuggestionPromptArea" prefRowCount="3" wrapText="true"
                                   promptText="Prompt for AI to generate SEO meta descriptions"/>
                     </VBox>
+                </VBox>
+            </ScrollPane>
+        </Tab>
+
+        <!-- Logging Tab -->
+        <Tab text="Logging" closable="false">
+            <ScrollPane fitToWidth="true" style="-fx-background-color: transparent;">
+                <VBox spacing="15">
+                    <padding>
+                        <Insets bottom="15" left="10" right="15" top="15"/>
+                    </padding>
+
+                    <Label text="Configure logging for debugging and auditing. Log files are stored in the project root."
+                           style="-fx-font-size: 11px; -fx-text-fill: #666; -fx-font-style: italic;" wrapText="true"/>
+
+                    <Separator/>
+
+                    <!-- AI Logging -->
+                    <VBox spacing="5">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <CheckBox fx:id="aiLoggingCheckbox" text="AI Interactions (ai.log)"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="aiLogSizeLabel" text="" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+                            <Button text="View" onAction="#onViewAiLog" style="-fx-font-size: 11px;"/>
+                            <Button text="Clear" onAction="#onClearAiLog" style="-fx-font-size: 11px;"/>
+                        </HBox>
+                        <Label text="Logs all AI prompts, responses, and interactions"
+                               style="-fx-font-size: 10px; -fx-text-fill: #888; -fx-padding: 0 0 0 24;"/>
+                    </VBox>
+
+                    <!-- API Logging -->
+                    <VBox spacing="5">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <CheckBox fx:id="apiLoggingCheckbox" text="Network Transactions (api.log)"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="apiLogSizeLabel" text="" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+                            <Button text="View" onAction="#onViewApiLog" style="-fx-font-size: 11px;"/>
+                            <Button text="Clear" onAction="#onClearApiLog" style="-fx-font-size: 11px;"/>
+                        </HBox>
+                        <Label text="Logs all HTTP requests and responses to external services"
+                               style="-fx-font-size: 10px; -fx-text-fill: #888; -fx-padding: 0 0 0 24;"/>
+                    </VBox>
+
+                    <!-- Holistic Logging -->
+                    <VBox spacing="5">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <CheckBox fx:id="holisticLoggingCheckbox" text="Human Activity (holistic.log)"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="holisticLogSizeLabel" text="" style="-fx-font-size: 10px; -fx-text-fill: #888;"/>
+                            <Button text="View" onAction="#onViewHolisticLog" style="-fx-font-size: 11px;"/>
+                            <Button text="Clear" onAction="#onClearHolisticLog" style="-fx-font-size: 11px;"/>
+                        </HBox>
+                        <Label text="Logs user actions and decisions at a high level for workflow analysis"
+                               style="-fx-font-size: 10px; -fx-text-fill: #888; -fx-padding: 0 0 0 24;"/>
+                    </VBox>
+
+                    <Separator/>
+
+                    <!-- Git Ignore Section -->
+                    <Label text=".gitignore Management" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
+
+                    <VBox spacing="8">
+                        <Label text="Exclude log files from version control to keep sensitive data out of Git."
+                               style="-fx-font-size: 11px; -fx-text-fill: #666;" wrapText="true"/>
+
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label fx:id="gitignoreStatusLabel" text="" style="-fx-font-size: 11px;"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="initGitignoreButton" text="Initialize .gitignore" onAction="#onInitGitignore"
+                                    style="-fx-background-color: #27ae60; -fx-text-fill: white;"/>
+                            <Button text="Edit .gitignore" onAction="#onEditGitignore" style="-fx-font-size: 11px;"/>
+                        </HBox>
+
+                        <VBox fx:id="gitignoreEntriesBox" spacing="5" style="-fx-padding: 10; -fx-background-color: #f8f8f8; -fx-background-radius: 4;">
+                            <CheckBox fx:id="ignoreAiLogCheckbox" text="Ignore ai.log"/>
+                            <CheckBox fx:id="ignoreApiLogCheckbox" text="Ignore api.log"/>
+                            <CheckBox fx:id="ignoreHolisticLogCheckbox" text="Ignore holistic.log"/>
+                        </VBox>
+                    </VBox>
+
                 </VBox>
             </ScrollPane>
         </Tab>

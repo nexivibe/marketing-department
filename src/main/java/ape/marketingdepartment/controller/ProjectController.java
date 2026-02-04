@@ -2,6 +2,7 @@ package ape.marketingdepartment.controller;
 
 import ape.marketingdepartment.MarketingApp;
 import ape.marketingdepartment.model.*;
+import ape.marketingdepartment.service.HolisticLogger;
 import ape.marketingdepartment.service.ai.AiReviewService;
 import ape.marketingdepartment.service.ai.AiServiceFactory;
 import com.vladsch.flexmark.html.HtmlRenderer;
@@ -57,6 +58,7 @@ public class ProjectController {
     private Parser markdownParser;
     private HtmlRenderer htmlRenderer;
     private AiServiceFactory aiServiceFactory;
+    private HolisticLogger holisticLogger;
 
     public void initialize(MarketingApp app, Project project) {
         this.app = app;
@@ -65,6 +67,14 @@ public class ProjectController {
         this.markdownParser = Parser.builder().build();
         this.htmlRenderer = HtmlRenderer.builder().build();
         this.aiServiceFactory = new AiServiceFactory(app.getSettings());
+
+        // Initialize holistic logger if enabled
+        if (project.getSettings().isHolisticLoggingEnabled()) {
+            this.holisticLogger = new HolisticLogger(project.getPath());
+            this.holisticLogger.sessionStart(project.getTitle());
+            this.holisticLogger.setContext("Project");
+            this.holisticLogger.opened("Project: " + project.getTitle());
+        }
 
         projectTitleLabel.setText(project.getTitle());
 
@@ -127,6 +137,9 @@ public class ProjectController {
     }
 
     private void onPostSelected(Post post) {
+        if (holisticLogger != null) {
+            holisticLogger.navigated("Post: " + post.getTitle());
+        }
         updatePostMetadata(post);
         updateStatusButtons(post);
         showMarkdownPreview(post);
@@ -712,6 +725,9 @@ public class ProjectController {
         if (selected == null) {
             return;
         }
+        if (holisticLogger != null) {
+            holisticLogger.opened("Publishing pipeline for: " + selected.getTitle());
+        }
         try {
             app.showPipelineExecutionDialog(project, selected);
         } catch (IOException e) {
@@ -724,6 +740,9 @@ public class ProjectController {
         Post selected = postsListView.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
+        }
+        if (holisticLogger != null) {
+            holisticLogger.edited("Metadata for: " + selected.getTitle());
         }
         try {
             app.showMetaEditorPopup(project, selected);
@@ -762,6 +781,9 @@ public class ProjectController {
 
         try {
             project.createPost(name, title);
+            if (holisticLogger != null) {
+                holisticLogger.created("Post: " + title);
+            }
             refreshPosts();
         } catch (IOException e) {
             showError("Failed to Create Post", e.getMessage());
@@ -814,6 +836,10 @@ public class ProjectController {
 
     @FXML
     private void onCloseProject() {
+        if (holisticLogger != null) {
+            holisticLogger.closed("Project: " + project.getTitle());
+            holisticLogger.sessionEnd();
+        }
         try {
             app.showStartupView();
         } catch (IOException e) {

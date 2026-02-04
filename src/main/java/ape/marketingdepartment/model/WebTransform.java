@@ -17,6 +17,7 @@ public class WebTransform {
     private boolean exported;     // Whether HTML has been exported
     private String lastExportPath; // Full path of last export
     private String verificationCode; // Code injected into HTML for verification
+    private String hnExportPath;  // Full path of Hacker News export (.hn.html)
 
     public WebTransform() {
         this.uri = "";
@@ -24,6 +25,7 @@ public class WebTransform {
         this.exported = false;
         this.lastExportPath = "";
         this.verificationCode = "";
+        this.hnExportPath = "";
     }
 
     public WebTransform(String uri, long timestamp, boolean exported, String lastExportPath) {
@@ -71,6 +73,24 @@ public class WebTransform {
 
     public void setVerificationCode(String verificationCode) {
         this.verificationCode = verificationCode;
+    }
+
+    public String getHnExportPath() {
+        return hnExportPath;
+    }
+
+    public void setHnExportPath(String hnExportPath) {
+        this.hnExportPath = hnExportPath;
+    }
+
+    /**
+     * Check if the HN exported file exists on disk.
+     */
+    public boolean hnExportedFileExists() {
+        if (hnExportPath == null || hnExportPath.isEmpty()) {
+            return false;
+        }
+        return Files.exists(Path.of(hnExportPath));
     }
 
     /**
@@ -126,6 +146,11 @@ public class WebTransform {
             transform.verificationCode = verificationCode;
         }
 
+        String hnExportPath = JsonHelper.extractStringField(json, "hnExportPath");
+        if (hnExportPath != null) {
+            transform.hnExportPath = hnExportPath;
+        }
+
         return transform;
     }
 
@@ -137,6 +162,7 @@ public class WebTransform {
         sb.append(", \"exported\": ").append(exported);
         sb.append(", \"lastExportPath\": ").append(JsonHelper.toJsonString(lastExportPath));
         sb.append(", \"verificationCode\": ").append(JsonHelper.toJsonString(verificationCode));
+        sb.append(", \"hnExportPath\": ").append(JsonHelper.toJsonString(hnExportPath));
         sb.append("}");
         return sb.toString();
     }

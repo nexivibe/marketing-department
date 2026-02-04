@@ -95,6 +95,37 @@ public class PipelineStage {
             case "bluesky" -> "Transform this blog post into a Bluesky post. " +
                     "Keep it under 300 characters if possible, or create a thread. " +
                     "Keep it engaging and authentic.";
+            case "facebook_copy_pasta" -> """
+                    Transform this blog post into an engaging Facebook post optimized for organic reach.
+
+                    Guidelines:
+                    - Start with a hook that grabs attention in the first line
+                    - Use conversational, friendly language that feels personal
+                    - Break up text with line breaks for easy mobile reading
+                    - Include 1-2 relevant emojis to add warmth (don't overdo it)
+                    - End with a question or call-to-action to encourage comments
+                    - Add 2-3 relevant hashtags at the end
+                    - Keep the total length between 100-300 words for optimal engagement
+                    - Make it feel like a friend sharing something interesting, not a corporate announcement
+                    """;
+            case "hackernews", "hacker_news", "hn" -> """
+                    Transform this blog post for the Hacker News audience.
+
+                    Guidelines:
+                    - Write in a direct, technical, and intellectually honest style
+                    - Lead with the most interesting or novel technical insight
+                    - Avoid marketing language, hype, or superlatives - HN readers are allergic to it
+                    - Be precise and specific - vague claims will be called out
+                    - Include concrete data, benchmarks, or evidence where possible
+                    - Acknowledge limitations, trade-offs, and what you don't know
+                    - Structure content logically with clear headings
+                    - Code examples should be clean and well-commented
+                    - The tone should be like explaining to a smart peer, not selling
+                    - Remove any calls-to-action, newsletter signups, or promotional content
+                    - If referencing other work, give proper credit
+                    - Keep the content substantive - HN values depth over brevity
+                    - Do not add front matter - just return the markdown content
+                    """;
             case "devto", "dev.to" -> """
                     Transform this blog post for publication on Dev.to, a developer community platform.
 

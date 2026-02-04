@@ -49,6 +49,9 @@
         <HBox alignment="CENTER_LEFT" spacing="10">
             <Label text="Transform Preview:" style="-fx-font-weight: bold;"/>
             <ComboBox fx:id="previewStageCombo" promptText="Select stage to preview" prefWidth="250"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button fx:id="saveTransformButton" text="Save Edits" onAction="#onSaveTransform"
+                    style="-fx-background-color: #27ae60; -fx-text-fill: white;" disable="true"/>
             <Button text="Regenerate" onAction="#onRegenerateTransform"/>
         </HBox>
         <TextArea fx:id="transformPreviewArea" wrapText="true" VBox.vgrow="ALWAYS"

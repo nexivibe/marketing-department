@@ -187,6 +187,61 @@ public class PipelineExecutionService {
     }
 
     /**
+     * Execute the Hacker News export stage.
+     * Exports the transformed content as an HTML file with .hn.html extension.
+     */
+    public PipelineExecution.StageResult executeHackerNewsExport(
+            Project project,
+            Post post,
+            String transformedContent,
+            Consumer<String> statusListener
+    ) {
+        try {
+            log("Starting Hacker News export for: " + post.getTitle());
+
+            statusListener.accept("Loading web transform...");
+            WebTransform webTransform = WebTransform.load(project.getPostsDirectory(), post.getName());
+            if (webTransform == null) {
+                webTransform = new WebTransform();
+                webTransform.setUri(WebTransform.generateSlug(post.getTitle()));
+            }
+
+            // Build the HN-specific filename (.hn.html instead of .html)
+            String uri = webTransform.getUri();
+            String hnUri;
+            if (uri.endsWith(".html")) {
+                hnUri = uri.substring(0, uri.length() - 5) + ".hn.html";
+            } else {
+                hnUri = uri + ".hn.html";
+            }
+
+            statusListener.accept("Exporting Hacker News HTML...");
+
+            // Export using the transformed content
+            Path exportedPath = webExportService.exportWithContent(project, post, hnUri, transformedContent);
+
+            // Update web transform with HN export path
+            webTransform.setHnExportPath(exportedPath.toString());
+            webTransform.save(project.getPostsDirectory(), post.getName());
+
+            String resultMsg = "HN export: " + exportedPath.getFileName();
+            statusListener.accept(resultMsg);
+            log("Hacker News export completed: " + exportedPath);
+
+            PipelineExecution.StageResult result = PipelineExecution.StageResult.completed(resultMsg);
+            return result;
+
+        } catch (IOException e) {
+            String errorMsg = "HN export failed: " + e.getMessage();
+            if (logger != null) {
+                logger.error(errorMsg, e);
+            }
+            statusListener.accept(errorMsg);
+            return PipelineExecution.StageResult.failed(errorMsg);
+        }
+    }
+
+    /**
      * Execute a GetLate social publishing stage.
      */
     public CompletableFuture<PipelineExecution.StageResult> executeSocialPublish(
@@ -399,20 +454,37 @@ public class PipelineExecutionService {
             // Use the stage's configured prompt
             String basePrompt = stage.getEffectivePrompt();
 
+            // Prepend user profile if configured
+            String userProfile = project.getSettings().getUserProfile();
+            if (userProfile != null && !userProfile.isBlank()) {
+                basePrompt = "AUTHOR CONTEXT:\n" + userProfile + "\n\n---\n\n" + basePrompt;
+            }
+
             // Enhance prompt with URL instruction if available
             String prompt = basePrompt;
             if (verifiedUrl != null && !verifiedUrl.isBlank()) {
-                String placement = "end"; // Default placement
-                if (profileId != null) {
-                    PublishingProfile profile = appSettings.getProfileById(profileId);
-                    if (profile != null) {
-                        placement = profile.getUrlPlacement();
-                    }
-                }
+                log("Including canonical URL in transform: " + verifiedUrl);
 
-                prompt = basePrompt + "\n\n" +
-                        "IMPORTANT: This content has been published at: " + verifiedUrl + "\n" +
-                        "Include this URL at the " + placement + " of your transformed content.";
+                // Use stage-type-specific URL instructions
+                if (stage.getType() == PipelineStageType.HACKER_NEWS_EXPORT) {
+                    prompt = basePrompt + "\n\n" +
+                            "CANONICAL URL: " + verifiedUrl + "\n" +
+                            "This is the canonical URL where this content is published. " +
+                            "Include this URL prominently - either as the first line (e.g., 'Originally published at: [URL]') " +
+                            "or as a clear reference at the end. HN readers appreciate knowing the original source.";
+                } else {
+                    String placement = "end"; // Default placement
+                    if (profileId != null) {
+                        PublishingProfile profile = appSettings.getProfileById(profileId);
+                        if (profile != null) {
+                            placement = profile.getUrlPlacement();
+                        }
+                    }
+
+                    prompt = basePrompt + "\n\n" +
+                            "IMPORTANT: This content has been published at: " + verifiedUrl + "\n" +
+                            "Include this URL at the " + placement + " of your transformed content.";
+                }
             }
 
             statusListener.accept("Generating " + platformDisplay + " transform...");
