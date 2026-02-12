@@ -18,6 +18,10 @@
                 <Separator orientation="VERTICAL"/>
                 <Button text="Project Settings" onAction="#onProjectSettings"/>
                 <Button text="Edit Pipeline" onAction="#onEditPipeline"/>
+                <Separator orientation="VERTICAL"/>
+                <Button text="Republish Web" onAction="#onRepublishAllWeb"
+                        style="-fx-background-color: #3498db; -fx-text-fill: white;"/>
+                <Separator orientation="VERTICAL"/>
                 <Button text="App Settings" onAction="#onAppSettings"/>
             </ToolBar>
             <Label fx:id="projectTitleLabel"
