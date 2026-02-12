@@ -50,14 +50,18 @@ Your AI talks to their AI. Your bot optimizes for their bot. Meanwhile, you're a
 
 - **Write once in Markdown** — your voice, your thoughts, no platform-specific compromises
 - **AI transforms for each platform** — LinkedIn gets professional, Twitter gets punchy, Instagram gets... whatever Instagram needs these days
-- **Publish everywhere simultaneously** — 13+ platforms through a unified pipeline
+- **Publish everywhere simultaneously** — 16 platforms through a unified pipeline
 - **Verify and track** — make sure your content actually landed before the algorithms decide its fate
 
 ### Supported Platforms
 
-Twitter/X, LinkedIn, Instagram, Facebook, TikTok, YouTube, Pinterest, Reddit, Bluesky, Threads, Google Business, Telegram, Snapchat, Dev.to
+**Automated via GetLate API:** Twitter/X, LinkedIn, Instagram, Facebook, TikTok, YouTube, Pinterest, Reddit, Bluesky, Threads, Google Business, Telegram, Snapchat
 
-*(Yes, all of them. Yes, at once. No, you don't have to open thirteen browser tabs.)*
+**Direct API:** Dev.to
+
+**Export/Manual:** Facebook (copy-pasta format), Hacker News (HTML export)
+
+*(Yes, all of them. Yes, at once. No, you don't have to open sixteen browser tabs.)*
 
 ---
 
@@ -74,12 +78,15 @@ Original Post (Markdown)
         ↓
    Platform Transforms (AI-powered)
         ↓
-   Mass Publication (GetLate API)
-        ↓
+   ┌────┴────┬──────────┬──────────────┬────────────────┐
+   ↓         ↓          ↓              ↓                ↓
+GetLate    Dev.to   Facebook       Hacker News     Bulk
+(13+)     (direct)  (copy-pasta)   (HTML export)   Republish
+   ↓         ↓          ↓              ↓                ↓
    You, outside, touching grass
 ```
 
-Each stage is configurable. Skip what you don't need. The point isn't to create more work—it's to eliminate it.
+Six configurable stage types: `WEB_EXPORT`, `URL_VERIFY`, `GETLATE`, `DEV_TO`, `FACEBOOK_COPY_PASTA`, and `HACKER_NEWS_EXPORT`. Mix and match. Skip what you don't need. The point isn't to create more work—it's to eliminate it.
 
 ---
 
@@ -144,19 +151,51 @@ mvn clean package
 
 **Q: Isn't this just automating spam?**
 
-A: No. Spam is low-effort content blasted indiscriminately. This is *your actual thoughts*, transformed appropriately for each context. The content is authentic; only the formatting is automated.
+A: Spam is a Nigerian prince asking for your bank details. This is *your actual thoughts*, professionally repackaged by a machine so that other machines find them acceptable. Completely different energy. You're not sending unsolicited garbage—you're sending *solicited* garbage, to platforms that literally begged you to "create content."
 
 **Q: Won't the algorithms penalize AI-generated content?**
 
-A: The algorithms are AI. You're bringing a knife to a knife fight. Besides, the *ideas* are human—the AI just handles the tedious reformatting that platforms demand.
+A: The algorithms *are* AI. You're worried about a robot judging content written by a robot? That's like worrying your calculator will be offended by your spreadsheet. The ideas are human. The AI just handles the part where LinkedIn needs you to sound like a TED Talk and Twitter needs you to sound like you're having a stroke in 280 characters.
 
 **Q: What if I actually enjoy crafting platform-specific content?**
 
-A: Then you have more patience than most. But also: why? That time could be spent writing *more* original thoughts, or—radical idea—not being online at all.
+A: Then you are a rare and beautiful creature and we wish you well. But consider: you could be using that same creative energy to write something *new*, or to go outside and experience the sun—a large yellow object that exists above the ceiling.
 
 **Q: Is the internet really dead?**
 
-A: Define "alive." If you mean "populated by authentic human engagement," then increasingly, no. But that's not a tragedy—it's an opportunity. The less time we spend performing for algorithms, the more time we have for actual human connection.
+A: Go post something on LinkedIn and count how many "Great insight! 🔥" comments come from accounts with 500+ connections and zero original posts. We'll wait.
+
+**Q: Why Java? In 2026? Really?**
+
+A: Because it runs everywhere, it'll outlive us all, and nobody's ever mass-deployed a JavaFX social media automation tool before. We're pioneers. Pioneers of *what*, exactly, remains to be seen.
+
+**Q: How many platforms do you actually support?**
+
+A: Sixteen, if you count the ones where we generate the content and you have to paste it yourself like an animal. We call that "Facebook Copy-Pasta mode." We're not proud of it, but Facebook's API requires a blood oath and three forms of government ID, so here we are.
+
+**Q: What happens if I publish the same thing to all platforms simultaneously?**
+
+A: Each platform gets its own AI-transformed version. LinkedIn gets the version that sounds like it was written by someone who uses "leverage" as a verb. Twitter gets the version that fits in a fortune cookie. Instagram gets the version that's 40% emoji. They're all you. Just... refracted through the prism of each platform's unique psychosis.
+
+**Q: Can I preview what the AI generates before it publishes?**
+
+A: Yes. We're unhinged, not irresponsible. You get to review every transform before it goes out. We learned this lesson after an early beta turned a thoughtful essay about work-life balance into an Instagram post that was just the 🍑 emoji fourteen times.
+
+**Q: Why is it called "Marketing Department"?**
+
+A: Because every solo creator, indie hacker, and one-person startup is also their own marketing department. This is the tool that department deserves—one that does the job in minutes so you can go back to building the thing you actually care about. Also, all the good names were taken.
+
+**Q: I found a bug.**
+
+A: Impossible. But hypothetically, if you *did* find a bug—which you didn't—you could open an issue on GitHub. The algorithm that surfaces your issue to a human maintainer appreciates clear reproduction steps.
+
+**Q: Will this make me go viral?**
+
+A: No. Nothing will make you go viral. Virality is a myth propagated by platforms to keep you posting. But this tool *will* give you consistent multi-platform presence without the soul-crushing repetition. Think of it less as "going viral" and more as "achieving omnipresence with minimal existential damage."
+
+**Q: Is there a cloud version?**
+
+A: No. Your content, your machine, your API keys, your business. We don't want your data. We don't want to know what you're posting. We *especially* don't want to know what you're posting to TikTok.
 
 ---
 
