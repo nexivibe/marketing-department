@@ -2,7 +2,11 @@ package ape.marketingdepartment.controller;
 
 import ape.marketingdepartment.MarketingApp;
 import ape.marketingdepartment.model.*;
+import ape.marketingdepartment.model.pipeline.Pipeline;
+import ape.marketingdepartment.model.pipeline.PipelineStageType;
 import ape.marketingdepartment.service.HolisticLogger;
+import ape.marketingdepartment.service.IndexExportService;
+import ape.marketingdepartment.service.WebExportService;
 import ape.marketingdepartment.service.ai.AiReviewService;
 import ape.marketingdepartment.service.ai.AiServiceFactory;
 import com.vladsch.flexmark.html.HtmlRenderer;
@@ -15,9 +19,12 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.web.WebView;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public class ProjectController {
@@ -48,6 +55,7 @@ public class ProjectController {
 
     // Transform buttons
     @FXML private HBox transformButtonsBox;
+    private Button regenerateWebButton;
 
     // AI Status Bar
     @FXML private HBox aiStatusBarContainer;
@@ -79,6 +87,7 @@ public class ProjectController {
         projectTitleLabel.setText(project.getTitle());
 
         setupPostsList();
+        setupRegenerateButton();
         setupAiStatusBar();
         refreshPosts();
         showPreviewPlaceholder();
@@ -89,6 +98,15 @@ public class ProjectController {
         aiStatusBar = new AiStatusBar();
         aiStatusBarContainer.getChildren().clear();
         aiStatusBarContainer.getChildren().add(aiStatusBar);
+    }
+
+    private void setupRegenerateButton() {
+        regenerateWebButton = new Button("Regenerate Web");
+        regenerateWebButton.setStyle("-fx-background-color: #3498db; -fx-text-fill: white;");
+        regenerateWebButton.setVisible(false);
+        regenerateWebButton.setManaged(false);
+        regenerateWebButton.setOnAction(e -> onRegenerateWeb());
+        transformButtonsBox.getChildren().add(regenerateWebButton);
     }
 
     private void setupPostsList() {
@@ -332,10 +350,23 @@ public class ProjectController {
     }
 
     private void updateTransformButtons(Post post) {
-        // Transform buttons shown only for REVIEW posts (not FINISHED)
-        boolean showTransform = post != null && post.getStatus() == PostStatus.REVIEW;
-        transformButtonsBox.setVisible(showTransform);
-        transformButtonsBox.setManaged(showTransform);
+        boolean isReview = post != null && post.getStatus() == PostStatus.REVIEW;
+
+        // Check if regenerate should be visible: REVIEW or FINISHED with existing web export
+        boolean showRegenerate = false;
+        if (post != null && (post.getStatus() == PostStatus.REVIEW || post.getStatus() == PostStatus.FINISHED)) {
+            WebTransform webTransform = WebTransform.load(project.getPostsDirectory(), post.getName());
+            showRegenerate = webTransform != null && webTransform.isExported() && webTransform.exportedFileExists();
+        }
+
+        // Edit Meta and Publish visible only for REVIEW
+        // Regenerate Web visible for REVIEW or FINISHED with export
+        regenerateWebButton.setVisible(showRegenerate);
+        regenerateWebButton.setManaged(showRegenerate);
+
+        boolean showBox = isReview || showRegenerate;
+        transformButtonsBox.setVisible(showBox);
+        transformButtonsBox.setManaged(showBox);
     }
 
     private void showMarkdownPreview(Post post) {
@@ -751,6 +782,85 @@ public class ProjectController {
         } catch (IOException e) {
             showError("Failed to Open Meta Editor", e.getMessage());
         }
+    }
+
+    private void onRegenerateWeb() {
+        Post selected = postsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        WebTransform webTransform = WebTransform.load(project.getPostsDirectory(), selected.getName());
+        if (webTransform == null || !webTransform.isExported() || !webTransform.exportedFileExists()) {
+            showError("No Web Export", "This post has no existing web export to regenerate.");
+            return;
+        }
+
+        regenerateWebButton.setDisable(true);
+
+        RegenerateProgressDialog dialog = new RegenerateProgressDialog(postsListView.getScene().getWindow());
+        dialog.show();
+
+        new Thread(() -> {
+            try {
+                WebExportService webExportService = new WebExportService();
+
+                // Re-export main HTML using existing verification code
+                dialog.updateStatus("Re-exporting main HTML...");
+                String existingCode = webTransform.getVerificationCode();
+                Path exportedPath = webExportService.export(project, selected, webTransform, existingCode);
+
+                // Update web transform paths
+                webTransform.setLastExportPath(exportedPath.toString());
+                webTransform.setTimestamp(System.currentTimeMillis());
+                webTransform.save(project.getPostsDirectory(), selected.getName());
+
+                StringBuilder result = new StringBuilder();
+                result.append("Main HTML: ").append(exportedPath.getFileName());
+
+                // Check for Hacker News export
+                Pipeline pipeline = Pipeline.load(project.getPath());
+                if (pipeline.hasStageOfType(PipelineStageType.HACKER_NEWS_EXPORT)) {
+                    Map<String, PlatformTransform> transforms =
+                            PlatformTransform.loadAll(project.getPostsDirectory(), selected.getName());
+                    PlatformTransform hnTransform = transforms.get("hackernews");
+
+                    if (hnTransform != null && hnTransform.getText() != null && !hnTransform.getText().isBlank()) {
+                        dialog.updateStatus("Re-exporting Hacker News HTML...");
+                        String hnUri = webTransform.getUri();
+                        if (hnUri != null && hnUri.endsWith(".html")) {
+                            hnUri = hnUri.replace(".html", ".hn.html");
+                        } else {
+                            hnUri = WebTransform.generateSlug(selected.getTitle()).replace(".html", ".hn.html");
+                        }
+                        Path hnPath = webExportService.exportWithContent(project, selected, hnUri, hnTransform.getText());
+
+                        webTransform.setHnExportPath(hnPath.toString());
+                        webTransform.save(project.getPostsDirectory(), selected.getName());
+
+                        result.append("\nHN HTML: ").append(hnPath.getFileName());
+                    }
+                }
+
+                // Re-export index/listing pages
+                dialog.updateStatus("Re-exporting index and listing pages...");
+                IndexExportService indexExportService = new IndexExportService();
+                List<Post> publishedPosts = project.getPosts().stream()
+                        .filter(p -> p.getStatus() != PostStatus.DRAFT)
+                        .toList();
+                IndexExportService.ExportResult indexResult = indexExportService.exportAll(project, publishedPosts);
+                if (indexResult.tagIndexExported()) {
+                    result.append("\nTag index updated");
+                }
+                if (indexResult.listingExported()) {
+                    result.append("\nListing pages updated (").append(indexResult.listingPages().size()).append(" pages)");
+                }
+
+                dialog.complete(result.toString());
+            } catch (Exception ex) {
+                dialog.error("Failed: " + ex.getMessage());
+            } finally {
+                Platform.runLater(() -> regenerateWebButton.setDisable(false));
+            }
+        }).start();
     }
 
     @FXML
