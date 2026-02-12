@@ -203,7 +203,8 @@ public class WebTransform {
             // Extract all existing platform transforms
             java.util.List<String> platforms = java.util.List.of("linkedin", "twitter", "bluesky", "threads",
                     "facebook", "instagram", "reddit", "tiktok", "youtube", "pinterest",
-                    "telegram", "snapchat", "googlebusiness", "devto");
+                    "telegram", "snapchat", "googlebusiness", "devto",
+                    "facebook_copy_pasta", "hackernews");
 
             for (String platform : platforms) {
                 String platformJson = JsonHelper.extractObjectField(content, platform);

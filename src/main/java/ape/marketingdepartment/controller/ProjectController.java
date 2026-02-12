@@ -767,7 +767,7 @@ public class ProjectController {
         List<Post> postsToRepublish = new ArrayList<>();
         for (Post post : project.getPosts()) {
             WebTransform wt = WebTransform.load(project.getPostsDirectory(), post.getName());
-            if (wt != null && wt.isExported() && wt.exportedFileExists()) {
+            if (wt != null && wt.isExported()) {
                 postsToRepublish.add(post);
             }
         }
